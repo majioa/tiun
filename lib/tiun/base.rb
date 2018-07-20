@@ -22,7 +22,6 @@ module Tiun::Base
       before_action :fetch_object, only: %i(show update destroy)
       before_action :fetch_objects, only: %i(index)
       before_action :authorize!, except: %i(dashboard)
-      layout 'tiun'
 
       rescue_from ActiveRecord::RecordNotUnique,
                   ActiveRecord::RecordInvalid,
@@ -72,19 +71,22 @@ module Tiun::Base
          format.json { render :show, json: @object, locales: @locales,
                                      serializer: object_serializer } ;end;end
 
-   def dashboard
-   end
-
-   def short_list
-      @calendaries = apply_scopes(model)
+   def ql
+      @list = apply_scopes(model)
 
       respond_to do |format|
-         format.json { render :index, json: @calendaries.limit(500),
+         format.json { render :index, json: @list.limit(500),
                                       locales: @locales,
-                                      serializer: Admin::AutocompleteSerializer,
+                                      serializer: Tiun::AutocompleteSerializer,
                                       total: @calendaries.count,
-                                      each_serializer: Admin::ShortCalendarySerializer }
+                                      each_serializer: Tiun::QlSerializer }
       end;end
+
+   def dashboard
+      settings = { settings: Tiun.settings, locales: @locales }
+
+      render inline: react_component('Dashboard', settings), layout: 'tiun'
+   end
 
    protected
 

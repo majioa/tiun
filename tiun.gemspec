@@ -39,4 +39,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "kaminari", "~> 1.1.1"
   spec.add_dependency "pundit", "~> 1.1.0"
   spec.add_dependency "active_model_serializers", "~> 0.10.6"
+  spec.add_dependency "webpacker", "~> 3.5.5"
 end

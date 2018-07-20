@@ -4,16 +4,20 @@ module Tiun
 #   extend ActiveSupport::Concern
 
    class << self
-      def config
-         @config || load_config
+      def settings
+         @settings ||= setup_classes(tiuns.map { | model | [ model.name.underscore, model.tiun ]}.to_h)
       end
 
-      def load_config
-         config = YAML.load(IO.read(Rails.root.join('config', 'tiun.yml')))
+      def tiuns
+         Rails.configuration.paths['app/models'].to_a.each do | path |
+            Dir.glob("#{path}/**/*.rb").each { |file| require(file) }
+         end
 
-         parse_config(config)
+         ActiveRecord::Base.tiuns
+      end
 
-         @config = config
+      def model_names
+         settings.keys
       end
 
       def base_controller
@@ -51,20 +55,18 @@ module Tiun
             end.flatten
          end
 
-      def parse_config config
-         config["controllers"].each do |controller|
-            model_name = -> { (controller["model"] || controller["name"]).titleize }
-            names = -> { (controller["name"]).pluralize.titleize }
-            name = -> { (controller["name"]).titleize }
-            param = -> { controller["model"] || controller["name"] }
-            params = -> { plain_hash([ 'id', controller[ "params" ]].compact.uniq ) }
+      def setup_classes settings
+         settings.each do | (model_name, tiun) |
+            name = -> { model_name.titleize }
+            names = -> { model_name.pluralize.titleize }
+            params = -> { tiun[ :fields ].keys }
 
             controller_rb = <<-RB
                class #{names[]}Controller < #{base_controller}
                   include Tiun::Base
 
                   def model
-                     ::#{model_name[]} ;end
+                     ::#{name[]} ;end
 
                   def object_serializer
                      Tiun::#{name[]}Serializer ;end
@@ -73,13 +75,13 @@ module Tiun
                      Tiun::#{names[]}Serializer ;end
 
                   def permitted_params
-                     params.require( #{param[]} ).permit( #{params[]} ) ;end
+                     params.require( #{name[]} ).permit( #{params[]} ) ;end
 
                end
             RB
 
             policy_rb = <<-RB
-               class #{model_name[]}Policy
+               class #{name[]}Policy
                   include Tiun::Policy
                end
             RB
@@ -87,8 +89,6 @@ module Tiun
             class_eval(controller_rb)
             class_eval(policy_rb)
          end
-
-         config
       end
    end
 
