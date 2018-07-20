@@ -1,3 +1,6 @@
+require 'rails'
+require 'active_support'
+
 require "tiun/version"
 
 module Tiun
