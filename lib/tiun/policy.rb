@@ -1,17 +1,10 @@
 module Tiun::Policy
+   class NotAuthorizedError < StandardError; end
+
    extend ActiveSupport::Concern
 
    included do
       attr_reader :user, :record
-   end
-
-   def initialize user, record
-      @user = user
-      @record = record
-   end
-
-   def default?
-      user.respond_to?(:admin?) && user.admin?
    end
 
    def all?
@@ -57,5 +50,16 @@ module Tiun::Policy
       def resolve
          scope
       end
+   end
+
+   protected
+
+   def initialize user, record
+      @user = user
+      @record = record
+   end
+
+   def default?
+      user.respond_to?(:admin?) && user.admin?
    end
 end

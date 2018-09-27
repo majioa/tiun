@@ -1,3 +1,5 @@
+require 'active_support'
+
 module Tiun::Base
    extend ActiveSupport::Concern
 
@@ -14,14 +16,14 @@ module Tiun::Base
 #         I18n.with_locale(I18n.locale.to_s, &block)
 #      include Pundit
 
-      before_action :authenticate_user!, except: %i(dashboard)
+      before_action :authenticate_user!
       before_action :set_tokens, only: %i(index)
       before_action :set_page, only: %i(index)
       before_action :set_locales
       before_action :new_object, only: %i(create)
       before_action :fetch_object, only: %i(show update destroy)
       before_action :fetch_objects, only: %i(index)
-      before_action :authorize!, except: %i(dashboard)
+      before_action :authorize!
 
       rescue_from ActiveRecord::RecordNotUnique,
                   ActiveRecord::RecordInvalid,
@@ -90,6 +92,12 @@ module Tiun::Base
 
    protected
 
+   def model
+      model = nil
+      binding.pry
+      model
+   end
+
    def apply_scopes model
       model
    end
@@ -101,8 +109,9 @@ module Tiun::Base
    end
 
    def authorize!
+      binding.pry
       if !policy_name.new(current_user, @object).send(action_name + '?')
-         raise Pundit::NotAuthorizedError, "not allowed to do #{action_name} this #{@object.inspect}" ;end;end
+         raise Tiun::Policy::NotAuthorizedError, "not allowed to do #{action_name} this #{@object.inspect}" ;end;end
 
    def unprocessable_entity e
       errors = @object.errors.any? && @object.errors || e.to_s

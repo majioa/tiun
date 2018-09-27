@@ -18,16 +18,17 @@ module Tiun::Model
       tiuns << self
       self.class.instance_variable_set(:@tiuns, tiuns) ;end
 
-   # +tiuns+ lists tiuned models.
+   # +tiuns+ returns lists of the tiuned models. In case the list is absent returns blank
+   # +Array+.
    #
    # Examples:
    #
-   #     Model.tiuns
+   #     Model.tiuns # => [ :Model ]
+   #
+   #     ActiveRecord::Base.tiuns # => []
    #
    def tiuns
-      self.class.instance_variable_get(:@tiuns)
-   rescue NameError
-      nil ;end
+      self.class.instance_variable_get(:@tiuns) || [] ;end
 
    protected
 
@@ -36,12 +37,20 @@ module Tiun::Model
       self.attribute_types.map do |( name, attr )|
          if !["created_at", "updated_at"].include?( name )
             kind = case attr.class.to_s.split("::").last
-            when "Integer"
+            when /Integer|SQLite3Integer/
                :integer
             when "String"
                :string
-            when "DateTime"
+            when "Text"
+               :text
+            when /DateTime|TimeZoneConverter/
                :datetime
+            when "Date"
+               :date
+            when "Time"
+               :time
+            when "Boolean"
+               :boolean
             else
             end
 
@@ -49,7 +58,7 @@ module Tiun::Model
                props = { type: kind }
                props[ :size ] = attr.limit if attr.limit
 
-               [name, props]
+               [name.to_sym, props]
             end
          end
       end.compact.to_h ;end

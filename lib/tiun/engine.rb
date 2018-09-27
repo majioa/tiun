@@ -1,3 +1,6 @@
+require 'rails'
+require 'active_record'
+
 class Tiun::Engine < ::Rails::Engine
    isolate_namespace Tiun
 
@@ -22,7 +25,7 @@ class Tiun::Engine < ::Rails::Engine
    config.autoload_paths += %W(#{Tiun::Engine.root}/lib/tiun/views)
 
    config.to_prepare do
-      ActiveRecord::Base.extend(Tiun::Model)
+      ::ActiveRecord::Base.extend(Tiun::Model)
       Tiun.tiuns
    end
 end

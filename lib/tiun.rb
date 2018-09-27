@@ -1,5 +1,4 @@
-require 'rails'
-require 'active_support'
+#require 'active_support'
 
 require "tiun/version"
 
@@ -8,7 +7,7 @@ module Tiun
 
    class << self
       def settings
-         @settings ||= setup_classes(tiuns.map { | model | [ model.name.underscore, model.tiun ]}.to_h)
+         @settings ||= setup_classes(tiuns.map { | model | [ model.name.underscore.to_sym, model.tiun ]}.to_h)
       end
 
       def tiuns
@@ -20,48 +19,48 @@ module Tiun
       end
 
       def model_names
-         settings.keys
+         settings.keys.map(&:to_s)
       end
 
       def base_controller
          @base_controller ||= ActionController::Base
       end
 
-         def plain_parm parm
-            case parm
-            when String
-               array = parm.split( /\s*,\s*/ )
-
-               if array.size > 1
-                  plain_array( array )
-               else
-                  array.first.to_sym
-               end
-            when Hash
-               plain_hash( parm )
-            when Array
-               plain_array( parm )
-            else
-               nil
-            end
-         end
-
-         def plain_hash hash
-            hash.map do |( key, parms )|
-               [ key.to_sym, plain_parm( parms )]
-            end.to_h
-         end
-
-         def plain_array array
-            array.map do | parm |
-               plain_parm( parm )
-            end.flatten
-         end
-
+#      def plain_parm parm
+#         case parm
+#         when String
+#            array = parm.split( /\s*,\s*/ )
+#
+#            if array.size > 1
+#               plain_array( array )
+#            else
+#               array.first.to_sym
+#            end
+#         when Hash
+#            plain_hash( parm )
+#         when Array
+#            plain_array( parm )
+#         else
+#            nil
+#         end
+#      end
+#
+#      def plain_hash hash
+#         hash.map do |( key, parms )|
+#            [ key.to_sym, plain_parm( parms )]
+#         end.to_h
+#      end
+#
+#      def plain_array array
+#         array.map do | parm |
+#            plain_parm( parm )
+#         end.flatten
+#      end
+#
       def setup_classes settings
          settings.each do | (model_name, tiun) |
-            name = -> { model_name.titleize }
-            names = -> { model_name.pluralize.titleize }
+            name = -> { model_name.to_s.camelize }
+            names = -> {  model_name.to_s.pluralize.camelize }
             params = -> { tiun[ :fields ].keys }
 
             controller_rb = <<-RB
@@ -72,15 +71,15 @@ module Tiun
                      ::#{name[]} ;end
 
                   def object_serializer
-                     Tiun::#{name[]}Serializer ;end
+                     #{name[]}Serializer ;end
 
                   def objects_serializer
-                     Tiun::#{names[]}Serializer ;end
+                     #{names[]}Serializer
+                  rescue NameError
+                     Tiun::PagedCollectionSerializer ;end
 
                   def permitted_params
-                     params.require( #{name[]} ).permit( #{params[]} ) ;end
-
-               end
+                     params.require( '#{model_name}' ).permit( #{params[]} ) ;end;end
             RB
 
             policy_rb = <<-RB
