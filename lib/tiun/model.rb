@@ -23,7 +23,7 @@ module Tiun::Model
    #
    # Examples:
    #
-   #     Model.tiuns # => [ :Model ]
+   #     Model.tiuns # => [ Model ]
    #
    #     ActiveRecord::Base.tiuns # => []
    #
