@@ -1,0 +1,240 @@
+---
+structs:
+   user: &user
+      names:
+         kind: array[Name]
+         optional: false
+         descriptions:
+            en: Name array for the user. It can include first name, last name, nickname, or title.
+
+      permissions:
+         kind: array[Permission]
+         optional: false
+         descriptions:
+            en: Defines permissions for the account, permissions include the admin, or any other write permission to a model.
+
+      descriptions:
+         kind: array[Lorem]
+         optional: true
+         descriptions:
+            en: Descriptions array of the user, which defined as array of Lorems.
+
+      recitals:
+         kind: array[Recital]
+         optional: false
+         descriptions:
+            en: Recitals array for the user or group, it defines all of user or group logins, email, jabber addresses etc.
+
+
+vridlo.user.index:
+   path: /v1/users
+   methods:
+      get:
+         version: 1.0
+         descriptions:
+            en: Returns a list of users, which are presented in the system. Do not poll this method more than once an hour. Added into API v1.0.
+         auth: no
+         args:
+            per_page:
+               kind: natural
+               optional: true
+               descriptions:
+                  en: Number of items to return per page. If this argument is omitted, it defaults to 10. The maximum allowed value is 50.
+            page:
+               kind: natural
+               optional: true
+               descriptions:
+                  en: The page of results to return. If this argument is omitted, it defaults to 1.
+            *user
+
+            names:
+               kind: array[Name]
+               optional: false
+               descriptions:
+                  en: Name array for the user. It can include first name, last name, nickname, or title.
+
+            permissions:
+               kind: array[Permission]
+               optional: false
+               descriptions:
+                  en: Defines permissions for the account, permissions include the admin, or any other write permission to a model.
+
+            descriptions:
+               kind: array[Lorem]
+               optional: true
+               descriptions:
+                  en: Descriptions array of the user, which defined as array of Lorems.
+
+            recitals:
+               kind: array[Recital]
+               optional: false
+               descriptions:
+                  en: Recitals array for the user or group, it defines all of user or group logins, email, jabber addresses etc.
+
+         errors:
+            200:
+               name: OK
+               descriptions:
+                  en: The resource list is accessible. Returned data responds to the current state of the resource list, and reading the list is finished.
+            206:
+               name: Partial Content
+               descriptions:
+                  en: The resource list is accessible. Returned data responds to the current state of the resource list, and reading the list is NOT finished yet.
+            416:
+               name: Range Not Satisfiable
+               descriptions:
+                  en: The resource list is accessible. But data can't be returned since range provided don't match the list boundaries.
+            422.3:
+               name: SSL is required)
+               descriptions:
+                  en: SSL is required to access the Vridlo API.
+            500:
+               name: Service currently unavailable
+               descriptions:
+                  en: The requested service is temporarily unavailable.
+vridlo.user.slug:
+   path: /v1/users/<slug>.json
+   descriptions:
+      en: This allows accessing to the specified user record by <slug> URI-parameter. Added into API v1.0.
+   methods:
+      post:
+         version: 1.0
+         descriptions:
+            en: Creates the user specified by <slug> URI-parameter using the set of properties passed as form data or get parameter array, and returns state of the created record as JSON.
+         auth: write
+         args:
+            names:
+               kind: array[Name]
+               optional: false
+               descriptions:
+                  en: Name array for the user. It can include first name, last name, nickname, or title.
+            permissions:
+               kind: array[Permission]
+               optional: true
+               descriptions:
+                  en: Defines permissions for the account, permissions include the admin, or any other write permission to a model.
+            descriptions:
+               kind: array[Lorem]
+               optional: true
+               descriptions:
+                  en: Descriptions array of the user, which defined as array of Lorems.
+            recitals:
+               kind: array[Recital]
+               optional: false
+               descriptions:
+                  en: Recitals array for the user or group, it defines all of user or group logins, email, jabber addresses etc.
+         errors:
+            200:
+               name: OK
+               descriptions:
+                  en: The resource wasn't found, and was created. Returned data responds to the current state of the resource.
+            422.3:
+               name: SSL is required
+               descriptions:
+                  en: SSL is required to access the Vridlo API.
+            422.5:
+               name: Invalid incoming data
+               descriptions:
+                  en: The incoming data is invalid. See details for help.
+            404:
+               name: Not Found
+               descriptions:
+                  en: The record with provided slug is not found.
+            500:
+               name: Internal Server Error
+               descriptions:
+                  en: The Internal Server Error has occurred.
+      get:
+         version: 1.0
+         descriptions:
+            en: Gets properties of the user specified by <slug> URI-parameter, and returns then as JSON. Do not poll this method more than once an hour.
+         auth: no
+         errors:
+            200:
+               name: OK
+               descriptions:
+                  en: The resource was found and is accessible. Returned data responds to the current state of the resource.
+            422.3:
+               name: SSL is required
+               descriptions:
+                  en: SSL is required to access the Vridlo API.
+            404:
+               name: Not Found
+               descriptions:
+                  en: The record with provided slug is not found.
+            500:
+               name: Internal Server Error
+               descriptions:
+                  en: The Internal Server Error has occurred.
+      put/patch:
+         version: 1.0
+         descriptions:
+            en: Sets one or many properties of the user specified by <slug> URI-parameter, and returns updated state as JSON.
+         auth: write
+         args:
+            names:
+               kind: array[Name]
+               optional: true
+               descriptions:
+                  en: Name array for the user.
+            admin:
+               kind: boolean
+               optional: true
+               descriptions:
+                  en: Is the user admin, the field requires superuser permission token to user model.
+            description:
+               kind: string
+               optional: true
+               descriptions:
+                  en: Description of the user.
+               kind: array[Recital]
+               optional: true
+               descriptions:
+                  en: Recital record array for the user.
+         errors:
+            200:
+               name: OK
+               descriptions:
+                  en: The resource was found and is accessible. Changes were made on the resource successfully. Returned data responds to the current state of the resource.
+            204:
+               name: No Content
+               descriptions:
+                  en: The resource was found and is accessible. But no changes were made on the resource.
+            422.3:
+               name: SSL Required
+               descriptions:
+                  en: SSL is required to access the Vridlo API
+            422.5:
+               name: Invalid incoming data
+               descriptions:
+                  en: The incoming data is invalid. See details for help.
+            404:
+               name: Not Found
+               descriptions:
+                  en: The record with provided id/slug is not found.
+            500:
+               name: Internal Server Error
+               descriptions:
+                  en: The Internal Server Error has occurred.
+      delete:
+         version: 1.0
+         descriptions:
+            en: Destroys the user specified by <slug> URI-parameter, and returns state of the destroyed record as JSON.
+         auth: write
+         errors:
+            200:
+               name: OK
+               descriptions:
+                  en: The resource was found and is accessible, and successfully destroyed. Returned data responds to the state of the destroyed resource.
+            422.3:
+               name: SSL Required
+               descriptions:
+                  en: SSL is required to access the Vridlo API.
+            404:
+               name: Not Found
+               descriptions:
+                  en: The record with provided slug is not found.
+            500:
+               name: Internal Server Error
+               descriptions:
+                  en: The Internal Server Error has occurred.

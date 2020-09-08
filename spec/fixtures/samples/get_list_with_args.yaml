@@ -1,0 +1,46 @@
+---
+project.user.index:
+   path: /v1/users
+   methods:
+      get:
+         version: 1.0
+         descriptions:
+            en: Returns a list of model records, which are presented in the system. Do not poll this method more than once an hour. Added into API v1.0.
+         auth: no
+         args:
+            per_page:
+               kind: natural
+               optional: true
+               descriptions: 
+                  en: Number of records to return per page. If this argument is omitted, it defaults to 10. The maximum allowed value is 50.
+            page:
+               kind: natural
+               optional: true
+               descriptions:
+                  en: The page of results to return. If this argument is omitted, it defaults to 1.
+            name:
+               kind: string
+               optional: false
+               descriptions:
+                  en: Name value for the search with. It must be a string.
+         errors:
+            200:
+               name: OK
+               descriptions:
+                  en: The resource list is accessible. Returned data responds to the current state of the resource list, and reading the list is finished.
+            206:
+               name: Partial Content
+               descriptions:
+                  en: The resource list is accessible. Returned data responds to the current state of the resource list, and reading the list is NOT finished yet.
+            416:
+               name: Range Not Satisfiable
+               descriptions:
+                  en: The resource list is accessible. But data can't be returned since range provided don't match the list boundaries.
+            422.3:
+               name: SSL Required
+               descriptions:
+                  en: SSL is required to access the Vridlo API.
+            500:
+               name: Service currently unavailable
+               descriptions:
+                  en: The requested service is temporarily unavailable.

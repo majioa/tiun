@@ -93,9 +93,9 @@ module Tiun::Base
    protected
 
    def model
-      model = nil
+      model_name = self.class.to_s.gsub(/.*::/, "").gsub("Controller", "").singularize
       binding.pry
-      model
+      model_name.constantize
    end
 
    def apply_scopes model

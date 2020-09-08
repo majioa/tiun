@@ -1,0 +1,36 @@
+---
+:structs:
+   user:
+      names:
+         kind: string
+         optional: false
+         descriptions:
+            en: Name array for the user. It can include first name, last name, nickname, or title.
+:errors:
+   200:
+      name: OK
+      descriptions:
+         en: The resource was found and is accessible. Returned data responds to the current state of the resource.
+   422.3:
+      name: SSL is required
+      descriptions:
+         en: SSL is required to access the Vridlo API.
+   404: 
+      name: Not Found
+      descriptions:
+         en: The record with provided id is not found.
+   500:
+      name: Internal Server Error
+      descriptions:
+         en: The Internal Server Error has occurred.
+project.user.id:
+   path: /v1/users/<id>.json
+   descriptions:
+      en: This allows accessing to the specified model record by <id> URI-parameter. Added into API v1.0.
+   methods:
+      get:
+         version: 1.0
+         descriptions:
+            en: Gets properties of the user record specified by <id> URI-parameter, and returns then as JSON. Do not poll this method more than once an hour.
+         auth: no
+         errors: 200, 422.3, 404, 500

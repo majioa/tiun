@@ -30,9 +30,15 @@ module Tiun::Model
    def tiuns
       self.class.instance_variable_get(:@tiuns) || [] ;end
 
+   def attribute_types
+      @_tiun_attribute_types ||= (
+         Tiun.migrate
+         super)
+   end
+
    protected
 
-   # :nodoc:
+    # :nodoc:
    def _tiun_parse_model
       self.attribute_types.map do |( name, attr )|
          if !["created_at", "updated_at"].include?( name )
@@ -61,7 +67,9 @@ module Tiun::Model
                [name.to_sym, props]
             end
          end
-      end.compact.to_h ;end
+       end.compact.to_h
+    rescue ActiveRecord::ConnectionNotEstablished
+       [] end
 
    #TODO
    #defaults fields: :user

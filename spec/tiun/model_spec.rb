@@ -1,3 +1,4 @@
+=begin
 RSpec.describe Tiun::Model do
 
    let(:tiun) do
@@ -28,3 +29,4 @@ RSpec.describe Tiun::Model do
       end
    end
 end
+=end
