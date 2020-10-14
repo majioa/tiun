@@ -307,7 +307,11 @@ module Tiun
       end
 
       def migrate
-         ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize)).migrate
+         if not @migrator
+            @migrator = ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize))
+            @migrator.migrate
+            @migrator = nil
+         end
       end
 
 #      def plain_parm parm
@@ -375,12 +379,11 @@ module Tiun
             class_eval(controller_rb)
             class_eval(policy_rb)
          end
-
-         def root
-            Gem::Specification.find_by_name( "tiun" ).full_gem_path
-         end
       end
 
+      def root
+         Gem::Specification.find_by_name( "tiun" ).full_gem_path
+      end
 
    end
 
