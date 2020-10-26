@@ -210,10 +210,19 @@ module Tiun
                model = model_title.camelize
                a = ControllerTemplate.result(binding)
                controllers[ controller ] = a
+#                  binding.pry
                string_eval(a, controller)
             end
 
             controllers
+         end
+      end
+
+      def draw_routes e
+         setup
+         e.get('/meta' => 'meta#index')
+         routes.each do |path, respond|
+            e.get(path => respond)
          end
       end
 
@@ -227,9 +236,7 @@ module Tiun
                   "#{pre}:#{key}#{post}" || context[ 'path' ]
 
                if !r[ path ]
-                  Tiun::Engine.routes.draw do
-                     r[ path ] = get( path => "#{controller}##{action}" )
-                  end
+                  r[ path ] = "#{controller}##{action}"
                end
             end
 
