@@ -34,9 +34,15 @@ module Tiun
             Dir.glob(::Rails.root.join("config", "tiun", "*.yaml")) do |config|
                setup_with(config)
             end
+
+            @setup = true
          else
             raise NoRailsError
          end
+      end
+
+      def setup_if_not
+         @setup ||= setup
       end
 
       def setup_with file
@@ -44,6 +50,7 @@ module Tiun
          load_structs_from( config )
          # load_error_codes_from( config )
          # binding.pry
+         load_attributes_from( config )
          load_migrations_from( config )
          load_models_from( config )
          load_policies_from( config )
@@ -70,6 +77,10 @@ module Tiun
          context[ 'migration' ] || "Create" + model_title_of( context, name ).pluralize.camelize
       end
 
+      def attribute_of context, name
+         context[ 'attribute' ] || model_title_of( context, name ).singularize.camelize
+      end
+
       def table_title_of context, name
          context[ 'table' ] || model_title_of(context, name).tableize
       end
@@ -80,6 +91,17 @@ module Tiun
 
       def serializer_name_for context, name
          context[ 'serializer' ] || model_title_of( context, name ).camelize + "Serializer"
+      end
+
+      def attribute_fields_for context, name
+         model = model_title_of( context, name )
+
+         structs[model].map do |(n, attrs)|
+            [
+               n,
+               type_of( attrs["kind"] ),
+            ]
+         end.to_h.merge({ "id" => type_of( 'index' )})
       end
 
       def migration_fields_for context, name
@@ -141,6 +163,14 @@ module Tiun
          end
       end
 
+      def load_attributes_from config
+         config_reduce( config, attributes ) do |attributes, name, context|
+            attribute = attribute_of( context, name )
+
+            attributes[ attribute ] ||= attribute_fields_for( context, name )
+         end
+      end
+
       def load_migrations_from config
          config_reduce( config, migrations ) do |migrations, name, context|
             migration = migration_of( context, name )
@@ -160,9 +190,10 @@ module Tiun
       def load_models_from config
          config_reduce( config, models ) do |models, name, context|
             model_title = model_title_of( context, name )
-            model = model_title.camelize
+            model_name = model_title.camelize
+            model = model_for( model_name )
 
-            if !models[ model ]
+            if !model && !models[ model ]
                a = ModelTemplate.result(binding)
                models[ model ] = a
                string_eval(a, model)
@@ -219,7 +250,7 @@ module Tiun
       end
 
       def draw_routes e
-         setup
+         setup_if_not
          e.get('/meta' => 'meta#index')
          routes.each do |path, respond|
             e.get(path => respond)
@@ -244,6 +275,12 @@ module Tiun
          end
       end
 
+      def attribute_types_for model
+         setup_if_not
+
+         attributes[ model.to_s ]
+      end
+
       def error_codes
          @error_codes ||= {}
       end
@@ -254,6 +291,10 @@ module Tiun
 
       def models
          @models ||= {}
+      end
+
+      def attributes
+         @attributes ||= {}
       end
 
       def migrations
@@ -301,6 +342,11 @@ module Tiun
          settings.keys.map(&:to_s)
       end
 
+      def model_for model_name
+         model_name.constantize
+      rescue NameError
+      end
+
       def base_model
          @base_model ||= ActiveRecord::Base
       end
@@ -314,13 +360,31 @@ module Tiun
       end
 
       def migrate
-         if not @migrator
-            @migrator = ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize))
-            @migrator.migrate
-            @migrator = nil
-         end
+         @up_migrator.nil? && (
+            @up_migrator = ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize))
+#binding.pry
+            @up_migrator.migrate
+         )
       end
 
+      def rollback
+         @down_migrator.nil? && (
+            @down_migrator = ActiveRecord::Migrator.new(:down, self.migrations.keys.map(&:constantize))
+#binding.pry
+            @down_migrator.migrate
+         )
+      end
+
+      def type_of kind
+         case kind
+         when 'string'
+            ActiveModel::Type::String.new
+         when 'integer', 'index'
+            ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer.new
+         else
+            raise
+         end
+      end
 #      def plain_parm parm
 #         case parm
 #         when String

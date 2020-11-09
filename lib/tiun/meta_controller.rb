@@ -5,6 +5,7 @@ class Tiun::MetaController < ActionController::Base
    # GET /meta/
    def index
       joint = Tiun.config.values.reduce({}) {|res, h| res.merge(h) }
+#binding.pry
       render json: joint.as_json
    end
 end
