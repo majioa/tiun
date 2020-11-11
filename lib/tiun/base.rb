@@ -92,13 +92,17 @@ module Tiun::Base
 
    protected
 
-   def model
+   def model_name
       @model_name ||= self.class.to_s.gsub(/.*::/, "").gsub("Controller", "").singularize
-      @model_name.constantize
+   end
+
+   def model
+      model_name.constantize
    end
 
    def object_serializer
-      Tiun::Serializer.new(model: model)
+      @serializer_name ||= "#{model_name}Serializer"
+      @serializer_name.constantize
    end
 
    def objects_serializer
