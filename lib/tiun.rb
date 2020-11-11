@@ -193,10 +193,10 @@ module Tiun
             model_name = model_title.camelize
             model = model_for( model_name )
 
-            if !model && !models[ model ]
+            if !model && !models[ model_name ]
                a = ModelTemplate.result(binding)
-               models[ model ] = a
-               string_eval(a, model)
+               models[ model_name ] = a
+               string_eval(a, model_name)
             end
 
             models
