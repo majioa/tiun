@@ -1,8 +1,14 @@
-class Tiun::Serializer
+module Tiun::Serializer
    class UndefinedModelError < StandardError; end
 
-   def initialize model = nil
-      raise UndefinedModelError if !model
+   def self.included kls
+      kls.class_eval do
+         def initialize model = nil
+            raise UndefinedModelError if !model
+
+            @model = model
+         end
+      end
    end
 
    def as_json *args

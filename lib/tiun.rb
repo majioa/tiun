@@ -224,6 +224,7 @@ module Tiun
             if !serializers[ serializer_name ]
                a = SerializerTemplate.result(binding)
                serializers[ serializer_name ] = a
+               #binding.pry
                string_eval(a, serializer_name)
             end
 
