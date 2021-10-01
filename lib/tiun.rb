@@ -1,7 +1,12 @@
+begin
+   require 'pry'
+rescue NameError
+end
 require 'erb'
 require 'action_controller'
 require 'active_record'
 
+require "tiun/mixins"
 require "tiun/version"
 
 module Tiun
@@ -27,6 +32,14 @@ module Tiun
       'delete' => 'destroy'
    }
 
+   TYPE_MAP = {
+      "string" => "string",
+      "uri" => "string",
+      "list" => nil,
+      "json" => "jsonb",
+      "enum" => "string",
+   }
+
    class << self
 
       def setup
@@ -41,71 +54,80 @@ module Tiun
 
       def setup_with file
          config = append_config( file )
-         load_structs_from( config )
          # load_error_codes_from( config )
          # binding.pry
-         load_migrations_from( config )
-         load_models_from( config )
-         load_policies_from( config )
-         load_routes_from( config )
-         load_controllers_from( config )
-         load_serializers_from( config )
+         load_types_from(config)
+         load_migrations_from(config)
+         load_models_from(config)
+         load_policies_from(config)
+         load_routes_from(config)
+         load_controllers_from(config)
+         load_serializers_from(config)
 
          config
       end
 
       def model_title_of context, name
-         name = context[ 'model' ] || context[ 'path' ].split( /\// )[ 0...-1 ].last.singularize
- 
-         name.blank? && raise( InvalidModelError ) || name
+         name = context.model || context.path&.split( /\// )&.slice(0...-1)&.last&.singularize
+
+         name.blank? && raise(InvalidModelError) || name
       end
 
       def controller_title_of context, name
-         name = context[ 'controller' ] || context[ 'path' ].split( /\// )[ 0...-1 ].join( "/" ).pluralize
+         name = context.controller || context.path&.split( /\// )&.slice(0...-1)&.join( "/" )&.pluralize
 
-         name.blank? && raise( InvalidControllerError ) || name
+         name.blank? && raise(InvalidControllerError) || name
       end
 
       def migration_of context, name
-         context[ 'migration' ] || "Create" + model_title_of( context, name ).pluralize.camelize
+         context.migration || "Create" + model_title_of(context, name).pluralize.camelize
       end
 
       def table_title_of context, name
-         context[ 'table' ] || model_title_of(context, name).tableize
+         context.table || model_title_of(context, name).tableize
       end
 
       def policy_name_for context, name
-         context[ 'policy' ] || model_title_of( context, name ).camelize + "Policy"
+         context.policy || model_title_of(context, name).camelize + "Policy"
       end
 
       def serializer_name_for context, name
-         context[ 'serializer' ] || model_title_of( context, name ).camelize + "Serializer"
+         context.serializer || model_title_of(context, name).camelize + "Serializer"
       end
 
       def migration_fields_for context, name
-         model = model_title_of( context, name )
+         model = model_title_of(context, name)
 
-         structs[model].map do |(n, attrs)|
-            {
-               name: n,
-               type: attrs["kind"],
-               options: {}
-            }
-         end
+         search_for(:types, model).fields.map do |attrs|
+            type = detect_type(attrs.kind)
+            type && { name: attrs.name, type: type, options: {} } || nil
+         end.compact
       end
 
-      def load_structs_from config
-        structs.replace( config[:structs] || {})
+      def detect_type type_in
+         type = TYPE_MAP[type_in]
+         type || !type.nil? && "reference" || nil
+         #type_in.split(/\s+/).reject {|x|x =~ /^</}.map do |type_tmp|
+         #   type = TYPE_MAP[type_tmp] #.keys.find {|key| key == type_tmp}
+         #   type || !type.nil? && "reference" || nil
+         #end.compact.uniq.join("_")
+      end
+
+      def load_types_from config
+         @types = types | (config.types || [])
+         # TODO validated types
       end
 
       def action_names_of context, name
-         actions = (context[ 'methods' ] || {}).map do |method_name, method|
-            rule = MAP[ method_name ]
+         actions = (context["methods"] || {}).map do |method|
+            method_name = method.name
+            rule = MAP[method_name]
 
-            action = rule.is_a?( String ) && rule || rule.reduce( nil ) do |a, (re, action)|
-               a || context['path'] =~ re && action || nil
+            action = rule.is_a?(String) && rule || rule.reduce(nil) do |a, (re, action)|
+               a || context.path =~ re && action || nil
             end
 
+            # TODO validated types
             if ! action
                error :no_action_detected_for_resource_method, { name: name, method: method_name }
             end
@@ -132,8 +154,8 @@ module Tiun
       end
 
       def config_reduce config, default
-         config.reduce( default ) do |res, (name, context)|
-            if name.is_a?(String)
+         config.resources.reduce(default) do |res, context|
+            if context.name.is_a?(String)
                yield(res, name, context)
             end
 
@@ -145,12 +167,12 @@ module Tiun
          config_reduce( config, migrations ) do |migrations, name, context|
             migration = migration_of( context, name )
 
-            if !migrations[ migration ]
+            if !search_for(:migrations, migration)
                table_title = table_title_of( context, name )
                migration_fields = migration_fields_for( context, name )
-               a = MigrationTemplate.result(binding)
-               migrations[ migration ] = a
-               string_eval(a, migration)
+               code = MigrationTemplate.result(binding)
+               migrations << { name: migration, code: code }.to_os
+               string_eval(code, migration)
             end
 
             migrations
@@ -162,10 +184,10 @@ module Tiun
             model_title = model_title_of( context, name )
             model = model_title.camelize
 
-            if !models[ model ]
-               a = ModelTemplate.result(binding)
-               models[ model ] = a
-               string_eval(a, model)
+            if !search_for(:models, model)
+               code = ModelTemplate.result(binding)
+               models << { name: model, code: code }.to_os
+               string_eval(code, model)
             end
 
             models
@@ -176,10 +198,10 @@ module Tiun
          config_reduce( config, policies ) do |policies, name, context|
             policy_name = policy_name_for( context, name )
 
-            if !policies[ policy_name ]
-               a = PolicyTemplate.result(binding)
-               policies[ policy_name ] = a
-               string_eval(a, policy_name)
+            if !search_for(:policies, policy_name)
+               code = PolicyTemplate.result(binding)
+               policies << { name: policy_name, code: code }.to_os
+               string_eval(code, policy_name)
             end
 
             policies
@@ -190,10 +212,10 @@ module Tiun
          config_reduce( config, serializers ) do |policies, name, context|
             serializer_name = serializer_name_for( context, name )
 
-            if !serializers[ serializer_name ]
-               a = SerializerTemplate.result(binding)
-               serializers[ serializer_name ] = a
-               string_eval(a, serializer_name)
+            if !search_for(:serializers, serializer_name)
+               code = SerializerTemplate.result(binding)
+               serializers << { name: serializer_name, code: code }.to_os
+               string_eval(code, serializer_name)
             end
 
             serializers
@@ -206,11 +228,11 @@ module Tiun
             model_title = model_title_of( context, name )
             controller = controller_title.camelize + 'Controller'
 
-            if !controllers[ controller ]
+            if !search_for(:controllers, controller)
                model = model_title.camelize
-               a = ControllerTemplate.result(binding)
-               controllers[ controller ] = a
-               string_eval(a, controller)
+               code = ControllerTemplate.result(binding)
+               controllers << { name: controller, code: code }.to_os
+               string_eval(code, controller)
             end
 
             controllers
@@ -226,9 +248,10 @@ module Tiun
                path = /(?<pre>.*)<(?<key>\w+)>(?<post>.*)/ =~ context['path'] &&
                   "#{pre}:#{key}#{post}" || context[ 'path' ]
 
-               if !r[ path ]
+       #  binding.pry # ? TODO
+               if r.select {|x|x.name == path}.blank?
                   Tiun::Engine.routes.draw do
-                     r[ path ] = get( path => "#{controller}##{action}" )
+                     r << { path: path, route: get( path => "#{controller}##{action}" ) }
                   end
                end
             end
@@ -237,44 +260,56 @@ module Tiun
          end
       end
 
-      def error_codes
-         @error_codes ||= {}
+      def search_for kind, value
+         send(kind).find {|x| x.name == value }
       end
 
-      def structs
-         @structs ||= {}
+      def search_all_for kind, value
+         send(kind).select {|x| x.name == value }
+      end
+
+      def error_codes
+         @error_codes ||= []
+      end
+
+      def types
+         @types ||= []
       end
 
       def models
-         @models ||= {}
+         @models ||= []
       end
 
       def migrations
-         @migrations ||= {}
+         @migrations ||= []
       end
 
       def policies
-         @policies ||= {}
+         @policies ||= []
       end
 
       def serializers
-         @serializers ||= {}
+         @serializers ||= []
       end
 
       def controllers
-         @controllers ||= {}
+         @controllers ||= []
       end
 
       def routes
-         @routes ||= {}
+         @routes ||= []
       end
 
       def config
          @config ||= {}
       end
 
+      def errors
+         @errors ||= []
+      end
+
       def append_config file
-         c = YAML.load(IO.read( file ))
+         c = YAML.load(IO.read( file )).to_os
          config[ File.expand_path( file )] = c
       end
 
@@ -307,7 +342,16 @@ module Tiun
       end
 
       def migrate
-         ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize)).migrate
+         migration_classes = self.migrations.map {|m| m.name.constantize }
+         ActiveRecord::Migrator.new(:up, migration_classes).migrate
+      end
+
+      def error code, options
+         errors << { code: code, options: options }
+      end
+
+      def valid?
+         errors.blank?
       end
 
 #      def plain_parm parm

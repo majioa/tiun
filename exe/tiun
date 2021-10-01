@@ -1,0 +1,5 @@
+#!/usr/bin/env ruby
+
+require 'tiun/cli'
+
+Tiun::CLI.new.run

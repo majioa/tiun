@@ -1,46 +1,158 @@
 ---
-project.user.index:
-   path: /v1/users
+types:
+ - name: short_article
+   version: 1.0
+   fields:
+    - name: value
+      kind: string
+      descriptions:
+         en: |
+            Value of the article. The value may consist of the letter,
+            spaces and some punctuation chars.
+    - name: tags
+      kind: string list
+      optional: true
+      descriptions:
+         en: |
+            Merged list of tags for the article, and its meaning,
+            represented as the string array.
+    - name: kind
+      kind: enum <Term, Saying, Interpretation, Idiom>
+      descriptions:
+         en: |
+            "Kind of the article, can contain one of values: Term,
+            Saying, Interpretation, Idiom"
+ - name: attitude
+   version: 1.0
+   fields:
+    - name: kind
+      kind: enum <Synonim, Antonim>
+      optional: true
+      descriptions:
+         en: "Kind of the article, can contain one of values: Synonim, Antonim"
+    - name: short_articles
+      kind: short_article list
+      optional: true
+      descriptions:
+         en: |
+            Merged list of short versions of the article,
+            represented as the array of short articles.
+ - name: tag
+   version: 1.0
+   fields:
+    - name: kind
+      kind: enum <SpeechPart>
+      optional: true
+      descriptions:
+         en: "Kind of the tag, can contain one of values: SpeechPart"
+    - name: value
+      kind: string
+      optional: true
+      descriptions:
+         en: Text of the tag with no spaces.
+ - name: article
+   version: 1.0
+   fields:
+    - name: language
+      kind: string
+      descriptions:
+         en: The article language 2-letter ISO code.
+    - name: alphabeth
+      kind: string
+      descriptions:
+         en: The article language 2-letter uppercase code.
+    - name: dictionary_uri
+      optional: true
+      kind: uri
+      descriptions:
+         en: URI of the dictionary if it is a network dictionary.
+    - name: value
+      kind: string
+      descriptions:
+         en: |
+            Value of the article. The value may consist of the letter,
+            spaces and some punctuation chars.
+    - name: tags
+      kind: string list
+      descriptions:
+         en: |
+            Merged list of tags for the article, and its meaning,
+            represented as the string array.
+    - name: meta
+      kind: json
+      descriptions:
+         en: Custom JSON data for the article.
+    - name: kind
+      kind: enum <Term, Saying, Interpretation, Idiom>
+      descriptions:
+         en: |
+            "Kind of the article, can contain one of values: Term,
+            Saying, Interpretation, Idiom"
+    - name: attitudes
+      kind: attitude
+      descriptions:
+         en: Attitudes JSON data.
+resources:
+ - name: article.index
+   path: /v1/articles/index.json
    methods:
-      get:
-         version: 1.0
+    - name: get
+      version: 1.0
+      kind: article list
+      descriptions:
+         en: |
+            Returns a list of acticle records, which are presented in the system,
+            conforming the arguments passed in.
+      auth: no
+      allowed_errors: [200, 206, 416, 422.3, 500]
+      args:
+       - name: per_page
+         kind: natural
+         default: 10
+         maximum: 50
+         descriptions: 
+            en: Number of records to return per page.
+       - name: page
+         kind: natural
+         default: 1
          descriptions:
-            en: Returns a list of model records, which are presented in the system. Do not poll this method more than once an hour. Added into API v1.0.
-         auth: no
-         args:
-            per_page:
-               kind: natural
-               optional: true
-               descriptions: 
-                  en: Number of records to return per page. If this argument is omitted, it defaults to 10. The maximum allowed value is 50.
-            page:
-               kind: natural
-               optional: true
-               descriptions:
-                  en: The page of results to return. If this argument is omitted, it defaults to 1.
-            name:
-               kind: string
-               optional: false
-               descriptions:
-                  en: Name value for the search with. It must be a string.
-         errors:
-            200:
-               name: OK
-               descriptions:
-                  en: The resource list is accessible. Returned data responds to the current state of the resource list, and reading the list is finished.
-            206:
-               name: Partial Content
-               descriptions:
-                  en: The resource list is accessible. Returned data responds to the current state of the resource list, and reading the list is NOT finished yet.
-            416:
-               name: Range Not Satisfiable
-               descriptions:
-                  en: The resource list is accessible. But data can't be returned since range provided don't match the list boundaries.
-            422.3:
-               name: SSL Required
-               descriptions:
-                  en: SSL is required to access the Vridlo API.
-            500:
-               name: Service currently unavailable
-               descriptions:
-                  en: The requested service is temporarily unavailable.
+            en: The page of results to return.
+       - name: name
+         kind: string
+         descriptions:
+               en: Name value for the search with.
+defaults:
+   poll_frequency: 3600 # 1 hour
+   optional: false # used in fields section
+   errors:
+    - code: 200
+      name:
+         en: OK
+      descriptions:
+         en: |
+            The resource list is accessible. Returned data responds to the current
+            state of the resource list, and reading the list is finished.
+    - code: 206
+      name:
+         en: Partial Content
+      descriptions:
+         en: |
+            The resource list is accessible. Returned data responds to the current
+            state of the resource list, and reading the list is NOT finished yet.
+    - code: 416
+      name:
+         en: Range Not Satisfiable
+      descriptions:
+         en: |
+            The resource list is accessible. But data can't be returned since
+            range provided don't match the list boundaries.
+    - code: 422.3
+      name:
+         en: SSL Required
+      descriptions:
+         en: SSL is required to access the Slovnik API.
+    - code: 500
+      name:
+         en: Service currently unavailable
+      descriptions:
+         en: The requested service is temporarily unavailable.
