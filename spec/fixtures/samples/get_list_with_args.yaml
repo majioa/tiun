@@ -98,7 +98,7 @@ resources:
    methods:
     - name: get
       version: 1.0
-      kind: article list
+      kind: article page
       descriptions:
          en: |
             Returns a list of acticle records, which are presented in the system,
