@@ -26,6 +26,6 @@ class Tiun::Engine < ::Rails::Engine
 
    config.to_prepare do
       ::ActiveRecord::Base.extend(Tiun::Model)
-      Tiun.tiuns
+      Tiun.setup
    end
 end

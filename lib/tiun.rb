@@ -40,16 +40,26 @@ module Tiun
       "enum" => "string",
    }
 
+   AR_MAP = {
+      "string" => "ActiveModel::Type::String",
+      "integer" => "ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer",
+      "index" => "ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer"
+  }
+
    class << self
 
       def setup
-         if defined?(::Rails)
-            Dir.glob(::Rails.root.join("config", "tiun", "*.yaml")) do |config|
+         if defined?(::Rails) && ::Rails.root
+            Dir.glob(::Rails.root&.join("config", "tiun", "*.yaml")) do |config|
                setup_with(config)
             end
-         else
-            raise NoRailsError
+
+            @setup = true
          end
+      end
+
+      def setup_if_not
+         @setup ||= setup
       end
 
       def setup_with file
@@ -57,6 +67,7 @@ module Tiun
          # load_error_codes_from( config )
          # binding.pry
          load_types_from(config)
+         load_attributes_from(config)
          load_migrations_from(config)
          load_models_from(config)
          load_policies_from(config)
@@ -83,6 +94,10 @@ module Tiun
          context.migration || "Create" + model_title_of(context, name).pluralize.camelize
       end
 
+      def attribute_of context, name
+         context[ 'attribute' ] || model_title_of( context, name ).singularize.camelize
+      end
+
       def table_title_of context, name
          context.table || model_title_of(context, name).tableize
       end
@@ -93,6 +108,10 @@ module Tiun
 
       def serializer_name_for context, name
          context.serializer || model_title_of(context, name).camelize + "Serializer"
+      end
+
+      def attribute_fields_for context, name
+         migration_fields_for(context, name) | [{ name: "id", type: 'index', options: {}}]
       end
 
       def migration_fields_for context, name
@@ -163,6 +182,14 @@ module Tiun
          end
       end
 
+      def load_attributes_from config
+         config_reduce( config, attributes ) do |attributes, name, context|
+            attribute = attribute_of( context, name )
+
+            attributes << { name: attribute, attribute_map: attribute_fields_for(context, name) }.to_os
+         end
+      end
+
       def load_migrations_from config
          config_reduce( config, migrations ) do |migrations, name, context|
             migration = migration_of( context, name )
@@ -182,12 +209,13 @@ module Tiun
       def load_models_from config
          config_reduce( config, models ) do |models, name, context|
             model_title = model_title_of( context, name )
-            model = model_title.camelize
+            model_name = model_title.camelize
+            model = model_for( model_name )
 
-            if !search_for(:models, model)
+            if !model && !search_for(:models, model_name)
                code = ModelTemplate.result(binding)
-               models << { name: model, code: code }.to_os
-               string_eval(code, model)
+               models << { name: model_name, code: code }.to_os
+               string_eval(code, model_name)
             end
 
             models
@@ -239,6 +267,14 @@ module Tiun
          end
       end
 
+      def draw_routes e
+         setup_if_not
+         e.get('/meta' => 'meta#index')
+         routes.each do |path, respond|
+            e.get(path => respond)
+         end
+      end
+
       def load_routes_from config
          config_reduce( config, routes ) do |r, name, context|
             controller = controller_title_of( context, name )
@@ -248,16 +284,23 @@ module Tiun
                path = /(?<pre>.*)<(?<key>\w+)>(?<post>.*)/ =~ context['path'] &&
                   "#{pre}:#{key}#{post}" || context[ 'path' ]
 
-       #  binding.pry # ? TODO
+               #  binding.pry # ? TODO
                if r.select {|x|x.name == path}.blank?
-                  Tiun::Engine.routes.draw do
-                     r << { path: path, route: get( path => "#{controller}##{action}" ) }
-                  end
+                  r << { path: path, route_name: "#{controller}##{action}" }
+                  #Tiun::Engine.routes.draw do
+                  #   r << { path: path, route: get( path => "#{controller}##{action}" ) }
+                  #end
                end
             end
 
             r
          end
+      end
+
+      def attribute_types_for model
+         setup_if_not
+
+         attributes.find {|a| a.name == model.name }
       end
 
       def search_for kind, value
@@ -278,6 +321,10 @@ module Tiun
 
       def models
          @models ||= []
+      end
+
+      def attributes
+         @attributes ||= []
       end
 
       def migrations
@@ -329,6 +376,11 @@ module Tiun
          settings.keys.map(&:to_s)
       end
 
+      def model_for model_name
+         model_name.constantize
+      rescue NameError
+      end
+
       def base_model
          @base_model ||= ActiveRecord::Base
       end
@@ -341,11 +393,6 @@ module Tiun
          @base_migration ||= ActiveRecord::Migration[5.2]
       end
 
-      def migrate
-         migration_classes = self.migrations.map {|m| m.name.constantize }
-         ActiveRecord::Migrator.new(:up, migration_classes).migrate
-      end
-
       def error code, options
          errors << { code: code, options: options }
       end
@@ -354,6 +401,32 @@ module Tiun
          errors.blank?
       end
 
+      def migrate
+         @up_migrator.nil? && (
+            @up_migrator = ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize))
+#binding.pry
+            @up_migrator.migrate
+         )
+      end
+
+      def rollback
+         @down_migrator.nil? && (
+            @down_migrator = ActiveRecord::Migrator.new(:down, self.migrations.keys.map(&:constantize))
+#binding.pry
+            @down_migrator.migrate
+         )
+      end
+
+#      def type_of kind
+#         case kind
+#         when 'string'
+#            :"ActiveModel::Type::String"
+#         when 'integer', 'index'
+#            :"ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer"
+#         else
+#            error :invalid_attribute_type_for_kind, { kind: kind }
+#         end
+#      end
 #      def plain_parm parm
 #         case parm
 #         when String
@@ -419,12 +492,11 @@ module Tiun
             class_eval(controller_rb)
             class_eval(policy_rb)
          end
-
-         def root
-            Gem::Specification.find_by_name( "tiun" ).full_gem_path
-         end
       end
 
+      def root
+         Gem::Specification.find_by_name( "tiun" ).full_gem_path
+      end
 
    end
 

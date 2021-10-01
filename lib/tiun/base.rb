@@ -16,14 +16,14 @@ module Tiun::Base
 #         I18n.with_locale(I18n.locale.to_s, &block)
 #      include Pundit
 
-      before_action :authenticate_user!
-      before_action :set_tokens, only: %i(index)
-      before_action :set_page, only: %i(index)
-      before_action :set_locales
+#      before_action :authenticate_user!
+#      before_action :set_tokens, only: %i(index)
+#      before_action :set_page, only: %i(index)
+#      before_action :set_locales
       before_action :new_object, only: %i(create)
       before_action :fetch_object, only: %i(show update destroy)
       before_action :fetch_objects, only: %i(index)
-      before_action :authorize!
+#      before_action :authorize!
 
       rescue_from ActiveRecord::RecordNotUnique,
                   ActiveRecord::RecordInvalid,
@@ -92,10 +92,21 @@ module Tiun::Base
 
    protected
 
+   def model_name
+      @model_name ||= self.class.to_s.gsub(/.*::/, "").gsub("Controller", "").singularize
+   end
+
    def model
-      model_name = self.class.to_s.gsub(/.*::/, "").gsub("Controller", "").singularize
-      binding.pry
       model_name.constantize
+   end
+
+   def object_serializer
+      @serializer_name ||= "#{model_name}Serializer"
+      @serializer_name.constantize
+   end
+
+   def objects_serializer
+      Tiun::ListSerializer.new(model: model)
    end
 
    def apply_scopes model

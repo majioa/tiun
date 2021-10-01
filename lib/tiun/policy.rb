@@ -7,6 +7,10 @@ module Tiun::Policy
       attr_reader :user, :record
    end
 
+   def valid?
+      true
+   end
+
    def all?
       default?
    end
@@ -36,7 +40,7 @@ module Tiun::Policy
    end
 
    def scope
-      Pundit.policy_scope!(user, record.class)
+      defined?(Pundit) && Pundit.policy_scope!(user, record.class) || ActiveRecord::Base
    end
 
    class Scope

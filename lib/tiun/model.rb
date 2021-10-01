@@ -31,10 +31,7 @@ module Tiun::Model
       self.class.instance_variable_get(:@tiuns) || [] ;end
 
    def attribute_types
-      @_tiun_attribute_types ||= (
-         Tiun.migrate
-         super)
-   end
+      @_tiun_attribute_types ||= Tiun.attribute_types_for(self) || super ;end
 
    protected
 

@@ -1,7 +1,11 @@
 require 'tiun/model'
 
-class ::<%= model %> < <%= base_model %>
+class ::<%= model_name %> < <%= base_model %>
    extend Tiun::Model
+
+   #<%= model %>
+   #validates_presence_of :names
+   #validates_uniqueness_of :names
 
    tiun
 end

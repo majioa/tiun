@@ -1,6 +1,6 @@
 ENV['RAILS_ENV']='test'
 require 'pry'
-require 'bundler/setup'
+#require 'bundler/setup'
 require 'match_hash'
 require "tiun"
 require "tiun/core_controller"
