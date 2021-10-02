@@ -285,9 +285,9 @@ module Tiun
                   "#{pre}:#{key}#{post}" || context[ 'path' ]
 
                #  binding.pry # ? TODO
-               if r.select {|x|x.name == path}.blank?
-                  r << { path: path, route_name: "#{controller}##{action}" }
+               if r.select {|x| x.path == path }.blank?
                   #Tiun::Engine.routes.draw do
+                  r << { path: path, name: "#{controller}##{action}" }.to_os
                   #   r << { path: path, route: get( path => "#{controller}##{action}" ) }
                   #end
                end

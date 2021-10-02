@@ -1,15 +1,4 @@
 class Object
-   def self.const_get c
-      super
-   rescue Exception => e
-      begin
-        require c.to_s.downcase
-      rescue Exception => e
-      end
-
-      super
-   end
-
    def blank?
       case self
       when NilClass, FalseClass

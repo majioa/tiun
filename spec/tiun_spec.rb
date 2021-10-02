@@ -24,12 +24,12 @@ RSpec.describe Tiun do
    describe 'tiun core' do
      subject { Tiun }
 
-      it { expect(subject.routes.keys).to match_array([ "/v1/users/:id.json" ]) }
-      it { expect(subject.controllers.keys).to match_array([ "::V1::UsersController" ]) }
-      it { expect(subject.policies.keys).to match_array([ "UserPolicy" ]) }
-      it { expect(subject.models.keys).to match_array([ "User" ]) }
-      it { expect(subject.migrations.keys).to match_array([ "CreateUsers" ]) }
-      it { expect(subject.serializers.keys).to match_array([ "UserSerializer" ]) }
+      it { expect(subject.routes.map {|x| x.path }).to match_array([ "/v1/users/:id.json" ]) }
+      it { expect(subject.controllers.map {|x| x.name }).to match_array([ "::V1::UsersController" ]) }
+      it { expect(subject.policies.map {|x| x.name }).to match_array([ "UserPolicy" ]) }
+      it { expect(subject.models.map {|x| x.name }).to match_array([ "User" ]) }
+      it { expect(subject.migrations.map {|x| x.name }).to match_array([ "CreateUsers" ]) }
+      it { expect(subject.serializers.map {|x| x.name }).to match_array([ "UserSerializer" ]) }
       xit { expect(subject.controllers.values).to match_array([ V1::UsersController ]) }
       xit { expect(subject.tiuns).to match_array([User]) }
 
