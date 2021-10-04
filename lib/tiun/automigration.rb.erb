@@ -1,8 +1,8 @@
 require 'tiun/model'
 
-class ::<%= migration %> < <%= base_migration %>
+class ::<%= migration_name %> < <%= base_migration %>
    def change
-      create_table :<%= table_title %> do |t|
+      create_table :<%= table_title %>, {id: false} do |t|
          <% migration_fields.each do |f| %>
          t.<%= f[:type] %> :<%=f[:name] %>, <%= f[:options].inspect %>
          <% end %>

@@ -8,16 +8,17 @@ require 'active_record'
 
 require "tiun/mixins"
 require "tiun/version"
+require "tiun/migration"
 
 module Tiun
    class NoRailsError < StandardError ;end
    class InvalidControllerError < StandardError ;end
    class InvalidModelError < StandardError ;end
 #   extend ActiveSupport::Concern
+   extend Tiun::Migration
 
    ControllerTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autocontroller.rb.erb")))
    ModelTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "automodel.rb.erb")))
-   MigrationTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "automigration.rb.erb")))
    PolicyTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autopolicy.rb.erb")))
    SerializerTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autoserializer.rb.erb")))
 
@@ -34,6 +35,7 @@ module Tiun
 
    TYPE_MAP = {
       "string" => "string",
+      "sequence" => "integer",
       "uri" => "string",
       "list" => nil,
       "json" => "jsonb",
@@ -49,12 +51,10 @@ module Tiun
    class << self
 
       def setup
-         if defined?(::Rails) && ::Rails.root
+         if defined?(::Rails) && ::Rails.root && !@config
             Dir.glob(::Rails.root&.join("config", "tiun", "*.yaml")) do |config|
                setup_with(config)
             end
-
-            @setup = true
          end
       end
 
@@ -63,10 +63,12 @@ module Tiun
       end
 
       def setup_with file
+         setup_migrations
          config = append_config( file )
          # load_error_codes_from( config )
          # binding.pry
          load_types_from(config)
+         load_defaults_from(config)
          load_attributes_from(config)
          load_migrations_from(config)
          load_models_from(config)
@@ -74,8 +76,7 @@ module Tiun
          load_routes_from(config)
          load_controllers_from(config)
          load_serializers_from(config)
-
-         config
+         @config = config
       end
 
       def model_title_of context, name
@@ -88,10 +89,6 @@ module Tiun
          name = context.controller || context.path&.split( /\// )&.slice(0...-1)&.join( "/" )&.pluralize
 
          name.blank? && raise(InvalidControllerError) || name
-      end
-
-      def migration_of context, name
-         context.migration || "Create" + model_title_of(context, name).pluralize.camelize
       end
 
       def attribute_of context, name
@@ -112,15 +109,6 @@ module Tiun
 
       def attribute_fields_for context, name
          migration_fields_for(context, name) | [{ name: "id", type: 'index', options: {}}]
-      end
-
-      def migration_fields_for context, name
-         model = model_title_of(context, name)
-
-         search_for(:types, model).fields.map do |attrs|
-            type = detect_type(attrs.kind)
-            type && { name: attrs.name, type: type, options: {} } || nil
-         end.compact
       end
 
       def detect_type type_in
@@ -180,6 +168,14 @@ module Tiun
 
             res
          end
+      rescue NoMethodError
+         error :no_resources_section_defined_in_config, {config: config, default: default}
+
+         []
+      end
+
+      def load_defaults_from config
+         @defaults = defaults.to_h.merge(config.defaults.to_h).to_os
       end
 
       def load_attributes_from config
@@ -187,22 +183,6 @@ module Tiun
             attribute = attribute_of( context, name )
 
             attributes << { name: attribute, attribute_map: attribute_fields_for(context, name) }.to_os
-         end
-      end
-
-      def load_migrations_from config
-         config_reduce( config, migrations ) do |migrations, name, context|
-            migration = migration_of( context, name )
-
-            if !search_for(:migrations, migration)
-               table_title = table_title_of( context, name )
-               migration_fields = migration_fields_for( context, name )
-               code = MigrationTemplate.result(binding)
-               migrations << { name: migration, code: code }.to_os
-               string_eval(code, migration)
-            end
-
-            migrations
          end
       end
 
@@ -269,9 +249,9 @@ module Tiun
 
       def draw_routes e
          setup_if_not
-         e.get('/meta' => 'meta#index')
-         routes.each do |path, respond|
-            e.get(path => respond)
+         e.get('/meta.json' => 'meta#index')
+         routes.each do |route|
+            e.get(route.uri => route.path)
          end
       end
 
@@ -285,9 +265,9 @@ module Tiun
                   "#{pre}:#{key}#{post}" || context[ 'path' ]
 
                #  binding.pry # ? TODO
-               if r.select {|x| x.path == path }.blank?
+               if r.select {|x| x.uri == path }.blank?
                   #Tiun::Engine.routes.draw do
-                  r << { path: path, name: "#{controller}##{action}" }.to_os
+                  r << { uri: path, path: "#{controller}##{action}" }.to_os
                   #   r << { path: path, route: get( path => "#{controller}##{action}" ) }
                   #end
                end
@@ -327,10 +307,6 @@ module Tiun
          @attributes ||= []
       end
 
-      def migrations
-         @migrations ||= []
-      end
-
       def policies
          @policies ||= []
       end
@@ -351,6 +327,10 @@ module Tiun
          @config ||= {}
       end
 
+      def defaults
+         @defaults ||= {}.to_os
+      end
+
       def errors
          @errors ||= []
       end
@@ -365,7 +345,7 @@ module Tiun
       end
 
       def tiuns
-         Rails.configuration.paths['app/models'].to_a.each do | path |
+         ::Rails.configuration.paths['app/models'].to_a.each do | path |
             Dir.glob("#{path}/**/*.rb").each { |file| require(file) }
          end
 
@@ -389,10 +369,6 @@ module Tiun
          @base_controller ||= ActionController::Base
       end
 
-      def base_migration
-         @base_migration ||= ActiveRecord::Migration[5.2]
-      end
-
       def error code, options
          errors << { code: code, options: options }
       end
@@ -401,21 +377,9 @@ module Tiun
          errors.blank?
       end
 
-      def migrate
-         @up_migrator.nil? && (
-            @up_migrator = ActiveRecord::Migrator.new(:up, self.migrations.keys.map(&:constantize))
-#binding.pry
-            @up_migrator.migrate
-         )
-      end
-
-      def rollback
-         @down_migrator.nil? && (
-            @down_migrator = ActiveRecord::Migrator.new(:down, self.migrations.keys.map(&:constantize))
-#binding.pry
-            @down_migrator.migrate
-         )
-      end
+      #def target_version
+      #
+      #end
 
 #      def type_of kind
 #         case kind
