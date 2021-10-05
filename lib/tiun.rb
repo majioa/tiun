@@ -52,9 +52,10 @@ module Tiun
 
       def setup
          if defined?(::Rails) && ::Rails.root && !@config
-            Dir.glob(::Rails.root&.join("config", "tiun", "*.yaml")) do |config|
-               setup_with(config)
-            end
+            files = Dir.glob(::Rails.root&.join("config", "tiun", "*.{yml,yaml}")) |
+                    Dir.glob(::Rails.root&.join("config", "tiun.{yml,yaml}"))
+
+            setup_with(*files)
          end
       end
 
@@ -62,21 +63,24 @@ module Tiun
          @setup ||= setup
       end
 
-      def setup_with file
+      def setup_with *files
          setup_migrations
-         config = append_config( file )
-         # load_error_codes_from( config )
-         # binding.pry
-         load_types_from(config)
-         load_defaults_from(config)
-         load_attributes_from(config)
-         load_migrations_from(config)
-         load_models_from(config)
-         load_policies_from(config)
-         load_routes_from(config)
-         load_controllers_from(config)
-         load_serializers_from(config)
-         @config = config
+
+         files.each do |file|
+            config = append_config(file)
+            # load_error_codes_from( config )
+            load_types_from(config)
+            load_defaults_from(config)
+            load_attributes_from(config)
+            load_models_from(config)
+            load_policies_from(config)
+            load_routes_from(config)
+            load_controllers_from(config)
+            load_serializers_from(config)
+         end
+
+         # validates
+         config
       end
 
       def model_title_of context, name
@@ -99,6 +103,10 @@ module Tiun
          context.table || model_title_of(context, name).tableize
       end
 
+      def table_title_for type
+         type.name.tableize
+      end
+
       def policy_name_for context, name
          context.policy || model_title_of(context, name).camelize + "Policy"
       end
@@ -108,7 +116,8 @@ module Tiun
       end
 
       def attribute_fields_for context, name
-         migration_fields_for(context, name) | [{ name: "id", type: 'index', options: {}}]
+         type = types.find { |t| t.name == name }
+         migration_fields_for(type) | [{ name: "id", type: 'index', options: {}}]
       end
 
       def detect_type type_in
@@ -122,7 +131,6 @@ module Tiun
 
       def load_types_from config
          @types = types | (config.types || [])
-         # TODO validated types
       end
 
       def action_names_of context, name
@@ -187,15 +195,15 @@ module Tiun
       end
 
       def load_models_from config
-         config_reduce( config, models ) do |models, name, context|
-            model_title = model_title_of( context, name )
+         config_reduce(config, models) do |models, name, context|
+            model_title = model_title_of(context, name)
             model_name = model_title.camelize
-            model = model_for( model_name )
+            model = model_for(model_name)
 
             if !model && !search_for(:models, model_name)
                code = ModelTemplate.result(binding)
                models << { name: model_name, code: code }.to_os
-               string_eval(code, model_name)
+               #string_eval(code, model_name)
             end
 
             models
@@ -425,8 +433,8 @@ module Tiun
       def setup_classes settings
          settings.each do | (model_name, tiun) |
             name = -> { model_name.to_s.camelize }
-            names = -> {  model_name.to_s.pluralize.camelize }
-            params = -> { tiun[ :fields ].keys }
+            names = -> { model_name.to_s.pluralize.camelize }
+            params = -> { tiun[:fields].map(&:first) }
 
             controller_rb = <<-RB
                class #{names[]}Controller < #{base_controller}

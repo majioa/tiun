@@ -1,17 +1,21 @@
 require 'tiun/version'
 
 module Tiun::Migration
-   Proxy = Struct.new(:name, :version, :code, :scope) do
-      def initialize(name, version, code, scope)
-         super
-         @migration = nil
-      end
+   Proxy = Struct.new(:name, :timestamp, :code) do
+      delegate :migrate, :announce, :write, :disable_ddl_transaction, to: :migration
 
       def basename
          ""
+         # TODO fake name file
       end
 
-      delegate :migrate, :announce, :write, :disable_ddl_transaction, to: :migration
+      def scope
+         nil
+      end
+
+      def version
+         timestamp.utc.strftime("%Y%m%d%H%M%S").to_i
+      end
 
       private
 
@@ -23,6 +27,11 @@ module Tiun::Migration
          Tiun.string_eval(code, name)
          name.constantize.new(name, version)
       end
+
+      def initialize(name, timestamp, code)
+         super
+         @migration = nil
+      end
    end
 
    MigrationTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "automigration.rb.erb")))
@@ -32,7 +41,7 @@ module Tiun::Migration
          alias :__old_migrations :migrations
 
          def migrations
-            (Tiun.proxied_migrations | __old_migrations).sort_by(&:version)
+            (Tiun.migrations | __old_migrations).sort_by(&:version)
          end
        end
    END
@@ -41,54 +50,51 @@ module Tiun::Migration
       @base_migration ||= ActiveRecord::Migration[5.2]
    end
 
-   def migration_of context, name
-      context.migration || "Create" + model_title_of(context, name).pluralize.camelize
+   def migration_name_for type
+      "Create" + type.name.pluralize.camelize
    end
 
-   def migration_fields_for context, name
-      model = model_title_of(context, name)
+   def fields_for type
+      type.fields | defaults.fields
+   end
 
-      fields = search_for(:types, model).fields | defaults.fields
-
-      fields.map do |attrs|
+   def migration_fields_for type
+      fields_for(type).map do |attrs|
          type = detect_type(attrs.kind)
          type && { name: attrs.name, type: type, options: {} } || nil
       end.compact
    end
 
-   def load_migrations_from config
-      config_reduce(config, migrations) do |migrations, name, context|
-         migration_name = migration_of(context, name)
+   def migrations
+      return @migrations if @migrations
 
-         if !search_for(:migrations, migration_name)
-            table_title = table_title_of(context, name)
-            migration_fields = migration_fields_for(context, name)
-            code = MigrationTemplate.result(binding)
-            timestamp = context.timestamp
+      @migrations =
+         types.reduce([]) do |migrations, type|
+            next migrations if type.parent
 
-            if timestamp
-               migrations << { name: migration_name, code: code, timestamp: timestamp }.to_os
+            migration_name = migration_name_for(type)
+
+            if migrations.any? { |m| m.name == migration_name }
+               error :duplicated_migration_found, {name: migration_name, type: type}
             else
-               error :no_timestamp_defined_for_migration, {name: migration_name, code: code}
-            end
-         end
+               table_title = table_title_for(type)
+               migration_fields = migration_fields_for(type)
+               code = MigrationTemplate.result(binding)
+               timestamp = type.timestamp
 
-         migrations
-      end
+               if timestamp
+                  migrations << Proxy.new(migration_name, type.timestamp, code)
+               else
+                  error :no_timestamp_defined_for_migration, {name: migration_name, code: code}
+               end
+            end
+
+            migrations
+         end
    end
 
    def search_all_for kind, value
       send(kind).select {|x| x.name == value }
-   end
-
-   def migrations
-      @migrations ||= []
-   end
-
-   def proxied_migrations
-      migrations.map do |m|
-         Proxy.new(m.name, m.timestamp.utc.strftime("%Y%m%d%H%M%S").to_i, m.code, nil)
-      end
    end
 
    def setup_migrations
