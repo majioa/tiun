@@ -9,6 +9,7 @@ require 'active_record'
 require "tiun/mixins"
 require "tiun/version"
 require "tiun/migration"
+require "tiun/attributes"
 
 module Tiun
    class NoRailsError < StandardError ;end
@@ -16,6 +17,7 @@ module Tiun
    class InvalidModelError < StandardError ;end
 #   extend ActiveSupport::Concern
    extend Tiun::Migration
+   extend Tiun::Attributes
 
    ControllerTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autocontroller.rb.erb")))
    ModelTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "automodel.rb.erb")))
@@ -42,12 +44,6 @@ module Tiun
       "enum" => "string",
    }
 
-   AR_MAP = {
-      "string" => "ActiveModel::Type::String",
-      "integer" => "ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer",
-      "index" => "ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer"
-  }
-
    class << self
 
       def setup
@@ -71,7 +67,6 @@ module Tiun
             # load_error_codes_from( config )
             load_types_from(config)
             load_defaults_from(config)
-            load_attributes_from(config)
             load_models_from(config)
             load_policies_from(config)
             load_routes_from(config)
@@ -95,10 +90,6 @@ module Tiun
          name.blank? && raise(InvalidControllerError) || name
       end
 
-      def attribute_of context, name
-         context[ 'attribute' ] || model_title_of( context, name ).singularize.camelize
-      end
-
       def table_title_of context, name
          context.table || model_title_of(context, name).tableize
       end
@@ -113,11 +104,6 @@ module Tiun
 
       def serializer_name_for context, name
          context.serializer || model_title_of(context, name).camelize + "Serializer"
-      end
-
-      def attribute_fields_for context, name
-         type = types.find { |t| t.name == name }
-         migration_fields_for(type) | [{ name: "id", type: 'index', options: {}}]
       end
 
       def detect_type type_in
@@ -162,7 +148,7 @@ module Tiun
          default = tokens[0].blank? && Object || Object.const_get(tokens[0])
 
          (tokens[1..-1] || []).reduce(default) do |o, token|
-            o.const_set(token, Module.new)
+            o.constants.include?(token.to_sym) && o.const_get(token) || o.const_set(token, Module.new)
          end
 
          eval(string)
@@ -186,14 +172,6 @@ module Tiun
          @defaults = defaults.to_h.merge(config.defaults.to_h).to_os
       end
 
-      def load_attributes_from config
-         config_reduce( config, attributes ) do |attributes, name, context|
-            attribute = attribute_of( context, name )
-
-            attributes << { name: attribute, attribute_map: attribute_fields_for(context, name) }.to_os
-         end
-      end
-
       def load_models_from config
          config_reduce(config, models) do |models, name, context|
             model_title = model_title_of(context, name)
@@ -203,7 +181,7 @@ module Tiun
             if !model && !search_for(:models, model_name)
                code = ModelTemplate.result(binding)
                models << { name: model_name, code: code }.to_os
-               #string_eval(code, model_name)
+               string_eval(code, model_name)
             end
 
             models
@@ -285,12 +263,6 @@ module Tiun
          end
       end
 
-      def attribute_types_for model
-         setup_if_not
-
-         attributes.find {|a| a.name == model.name }
-      end
-
       def search_for kind, value
          send(kind).find {|x| x.name == value }
       end
@@ -309,10 +281,6 @@ module Tiun
 
       def models
          @models ||= []
-      end
-
-      def attributes
-         @attributes ||= []
       end
 
       def policies

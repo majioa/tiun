@@ -55,7 +55,7 @@ module Tiun::Migration
    end
 
    def fields_for type
-      type.fields | defaults.fields
+      (type.fields || []) | (defaults.fields || [])
    end
 
    def migration_fields_for type

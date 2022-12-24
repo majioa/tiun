@@ -1,3 +1,5 @@
+require 'tiun/version'
+
 module Tiun::Model
    # +tiun+ sets up tiuner for the model. This exports corresponding record fields to default
    # dashboard method, which loads the react component. When the model has been set up, the method
@@ -10,13 +12,16 @@ module Tiun::Model
    #     Model.tiun
    #
    def tiun
-      return self.instance_variable_get(:@tiun) if self.instance_variables.include?(:@tiun)
+      ## return self.instance_variable_get(:@tiun) if self.instance_variables.include?(:@tiun)
 
-      self.instance_variable_set(:@tiun, { fields: _tiun_parse_model})
+      ## self.instance_variable_set(:@tiun, { fields: _tiun_parse_model})
 
-      tiuns = self.class.instance_variables.include?(:@tiun) && self.class.instance_variable_get(:@tiuns) || []
-      tiuns << self
-      self.class.instance_variable_set(:@tiuns, tiuns) ;end
+      ## tiuns = self.class.instance_variables.include?(:@tiun) && self.class.instance_variable_get(:@tiuns) || []
+      ## tiuns << self
+      ## self.class.instance_variable_set(:@tiuns, tiuns)
+      #
+      # belongs_to, has_many, has_one
+   end
 
    # +tiuns+ returns lists of the tiuned models. In case the list is absent returns blank
    # +Array+.
