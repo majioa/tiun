@@ -47,7 +47,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "shoulda-matchers-cucumber", "~> 1.0"
   spec.add_development_dependency "match_hash", "~> 0.1.2"
   spec.add_development_dependency "dawnscanner", "~> 1.6"
+  spec.add_development_dependency "active_model_serializers", "~> 0.10", ">= 0.10.6"
   spec.add_runtime_dependency "activesupport", ">= 4.1.0"
   spec.add_runtime_dependency "railties", ">= 4.1.0"
-  spec.add_runtime_dependency "active_model_serializers", "~> 0.10", ">= 0.10.6"
 end
