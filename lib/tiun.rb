@@ -10,6 +10,8 @@ require "tiun/mixins"
 require "tiun/version"
 require "tiun/migration"
 require "tiun/attributes"
+require "tiun/base"
+require "tiun/core_helper"
 
 module Tiun
    class NoRailsError < StandardError ;end
@@ -19,15 +21,10 @@ module Tiun
    extend Tiun::Migration
    extend Tiun::Attributes
 
-   ControllerTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autocontroller.rb.erb")))
-   ModelTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "automodel.rb.erb")))
-   PolicyTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autopolicy.rb.erb")))
-   SerializerTemplate = ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autoserializer.rb.erb")))
-
    MAP = {
       'get' => {
-         /index.json/ => 'index',
-         /<\w+>.json/ => 'show',
+         %r{(?:/(?<c>[^:/]+)).json} => 'index',
+         %r{(?:/(?<c>[^/]+)/:[^/]+).json} => 'show',
       },
       'post' => 'create',
       'patch' => 'update',
@@ -44,8 +41,15 @@ module Tiun
       "enum" => "string",
    }
 
-   class << self
+   TEMPLATES = {
+      model: ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "automodel.rb.erb"))),
+      policy: ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autopolicy.rb.erb"))),
+      controller: ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autocontroller.rb.erb"))),
+#      list_serializer: ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autolistserializer.rb.erb"))),
+#      serializer: ERB.new(IO.read(File.join(File.dirname(__FILE__), "tiun", "autoserializer.rb.erb")))
+   }
 
+   class << self
       def setup
          if defined?(::Rails) && ::Rails.root && !@config
             files = Dir.glob(::Rails.root&.join("config", "tiun", "*.{yml,yaml}")) |
@@ -67,45 +71,66 @@ module Tiun
             # load_error_codes_from( config )
             load_types_from(config)
             load_defaults_from(config)
-            load_models_from(config)
-            load_policies_from(config)
+            %i(model controller policy).each do |kind|
+               instance_variable_set("@#{kind.to_s.pluralize}", parse_objects(kind, config))
+            end
             load_routes_from(config)
-            load_controllers_from(config)
-            load_serializers_from(config)
          end
 
          # validates
          config
       end
 
-      def model_title_of context, name
-         name = context.model || context.path&.split( /\// )&.slice(0...-1)&.last&.singularize
-
-         name.blank? && raise(InvalidModelError) || name
+      def model_name_for context
+         context.model ||
+            %r{(?:/(?<c>[^/]+)/:[^/]+|/(?<c>[^:/]+)).json} =~ context.path && c ||
+            context.name.split(".").first
       end
 
-      def controller_title_of context, name
-         name = context.controller || context.path&.split( /\// )&.slice(0...-1)&.join( "/" )&.pluralize
-
-         name.blank? && raise(InvalidControllerError) || name
+      def controller_name_for context
+         context.controller ||
+            %r{^(?:(?<c>.+)/:[^/]+|/(?<c>[^:]+)).json} =~ context.path && c ||
+            context.name.split(".").first
       end
 
-      def table_title_of context, name
-         context.table || model_title_of(context, name).tableize
+      def model_title_for context
+         name = model_name_for(context)
+
+         name ? name.singularize.camelize : raise(InvalidModelError)
+      end
+
+      def controller_title_for context
+         name = controller_name_for(context)
+
+         name ? name.pluralize.camelize + 'Controller' : raise(InvalidControllerError)
+      end
+
+      def route_title_for context
+         name = controller_name_for(context)
+
+         name ? name.pluralize : raise(InvalidControllerError)
+      end
+
+      def table_title_for context
+         context.table || model_name_for(context).tableize
       end
 
       def table_title_for type
          type.name.tableize
       end
 
-      def policy_name_for context, name
-         context.policy || model_title_of(context, name).camelize + "Policy"
+      def policy_title_for context
+         context.policy || model_name_for(context).singularize.camelize + "Policy"
       end
 
-      def serializer_name_for context, name
-         context.serializer || model_title_of(context, name).camelize + "Serializer"
-      end
-
+#      def serializer_title_for context
+#         context.serializer || model_name_for(context).singularize.camelize + "Serializer"
+#      end
+#
+#      def list_serializer_title_for context
+#         context.list_serializer || model_name_for(context).singularize.camelize + "ListSerializer"
+#      end
+#
       def detect_type type_in
          type = TYPE_MAP[type_in]
          type || !type.nil? && "reference" || nil
@@ -119,7 +144,7 @@ module Tiun
          @types = types | (config.types || [])
       end
 
-      def action_names_of context, name
+      def action_names_for context
          actions = (context["methods"] || {}).map do |method|
             method_name = method.name
             rule = MAP[method_name]
@@ -130,14 +155,14 @@ module Tiun
 
             # TODO validated types
             if ! action
-               error :no_action_detected_for_resource_method, { name: name, method: method_name }
+               error :no_action_detected_for_resource_method, { name: context.name, method: method_name }
             end
 
-            action
-         end.compact
+            action ? [action, method] : nil
+         end.compact.to_h
 
          if actions.blank?
-            error :no_valid_method_defined_for_resource, { name: name }
+            error :no_valid_method_defined_for_resource, { name: context.name }
          end
 
          actions
@@ -157,10 +182,10 @@ module Tiun
       def config_reduce config, default
          config.resources.reduce(default) do |res, context|
             if context.name.is_a?(String)
-               yield(res, name, context)
+               yield(res, context.name, context)
+            else
+               res
             end
-
-            res
          end
       rescue NoMethodError
          error :no_resources_section_defined_in_config, {config: config, default: default}
@@ -172,94 +197,61 @@ module Tiun
          @defaults = defaults.to_h.merge(config.defaults.to_h).to_os
       end
 
-      def load_models_from config
-         config_reduce(config, models) do |models, name, context|
-            model_title = model_title_of(context, name)
-            model_name = model_title.camelize
-            model = model_for(model_name)
+      def parse_objects kind, config
+         config_reduce(config, send(kind.to_s.pluralize)) do |res, name, context|
+            object_name = send("#{kind}_title_for", context)
 
-            if !model && !search_for(:models, model_name)
-               code = ModelTemplate.result(binding)
-               models << { name: model_name, code: code }.to_os
-               string_eval(code, model_name)
+            unless search_for(kind.to_s.pluralize, object_name)
+               object_in = constantize(object_name)
+               code = TEMPLATES[kind].result(binding)
+               object = string_eval(code, object_name)
+
+               res | [{ name: object_name, code: code, const: object }.to_os]
+            else
+               res
             end
-
-            models
-         end
-      end
-
-      def load_policies_from config
-         config_reduce( config, policies ) do |policies, name, context|
-            policy_name = policy_name_for( context, name )
-
-            if !search_for(:policies, policy_name)
-               code = PolicyTemplate.result(binding)
-               policies << { name: policy_name, code: code }.to_os
-               string_eval(code, policy_name)
-            end
-
-            policies
-         end
-      end
-
-      def load_serializers_from config
-         config_reduce( config, serializers ) do |policies, name, context|
-            serializer_name = serializer_name_for( context, name )
-
-            if !search_for(:serializers, serializer_name)
-               code = SerializerTemplate.result(binding)
-               serializers << { name: serializer_name, code: code }.to_os
-               string_eval(code, serializer_name)
-            end
-
-            serializers
-         end
-      end
-
-      def load_controllers_from config
-         config_reduce( config, controllers ) do |controllers, name, context|
-            controller_title = controller_title_of( context, name )
-            model_title = model_title_of( context, name )
-            controller = controller_title.camelize + 'Controller'
-
-            if !search_for(:controllers, controller)
-               model = model_title.camelize
-               code = ControllerTemplate.result(binding)
-               controllers << { name: controller, code: code }.to_os
-               string_eval(code, controller)
-            end
-
-            controllers
-         end
-      end
-
-      def draw_routes e
-         setup_if_not
-         e.get('/meta.json' => 'meta#index')
-         routes.each do |route|
-            e.get(route.uri => route.path)
          end
       end
 
       def load_routes_from config
-         config_reduce( config, routes ) do |r, name, context|
-            controller = controller_title_of( context, name )
-            actions = action_names_of( context, name )
+         @routes =
+         config_reduce(config, routes) do |r, name, context|
+            controller = route_title_for(context)
+            actions = action_names_for(context)
 
-            actions.each do |action|
-               path = /(?<pre>.*)<(?<key>\w+)>(?<post>.*)/ =~ context['path'] &&
-                  "#{pre}:#{key}#{post}" || context[ 'path' ]
+            actions.reduce(r) do |res, (action, method)|
+               /(\.(?<format>[^.]+))$/ =~ context.path
 
-               #  binding.pry # ? TODO
-               if r.select {|x| x.uri == path }.blank?
-                  #Tiun::Engine.routes.draw do
-                  r << { uri: path, path: "#{controller}##{action}" }.to_os
-                  #   r << { path: path, route: get( path => "#{controller}##{action}" ) }
-                  #end
+               path =
+                  /(?<pre>.*)<(?<key>\w+)>(?<post>.*)/ =~ context.path &&
+                  "#{pre}:#{key}#{post}" || context.path
+
+               if res.select {|x| x[:uri] == path }.blank?
+                  attrs = { uri: path, path: "#{controller}##{action}", kind: method.name }
+                  attrs = attrs.merge(options: {defaults: { format: format }, constraints: { format: format }}) if format
+
+                  res | [attrs]
+               else
+                  res
                end
             end
+         end
+      end
 
-            r
+      def default_route
+         {
+            uri: '/meta.json',
+            path: 'meta#index',
+            kind: 'get',
+            options: { defaults: { format: 'json' }, constraints: { format: 'json' }}
+         }
+      end
+
+      def draw_routes e
+         setup_if_not
+         routes.each do |route|
+            attrs = { route[:uri] => route[:path] }.merge(route[:options])
+            e.send(route[:kind], **attrs)
          end
       end
 
@@ -287,16 +279,20 @@ module Tiun
          @policies ||= []
       end
 
-      def serializers
-         @serializers ||= []
-      end
-
+#      def serializers
+#         @serializers ||= []
+#      end
+#
+#      def list_serializers
+#         @list_serializers ||= []
+#      end
+#
       def controllers
          @controllers ||= []
       end
 
       def routes
-         @routes ||= []
+         @routes ||= [default_route]
       end
 
       def config
@@ -328,12 +324,12 @@ module Tiun
          ActiveRecord::Base.tiuns
       end
 
-      def model_names
-         settings.keys.map(&:to_s)
-      end
-
-      def model_for model_name
-         model_name.constantize
+#      def model_names
+#         settings.keys.map(&:to_s)
+#      end
+#
+      def constantize name
+         name.constantize
       rescue NameError
       end
 

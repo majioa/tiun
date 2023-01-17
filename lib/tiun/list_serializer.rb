@@ -1,11 +1,14 @@
-class Tiun::PagedCollectionSerializer < ActiveModel::Serializer::CollectionSerializer
-   def as_json *args
+module ::Tiun::ListSerializer
+   def as_json *_args
       serializable_hash
    end
 
-   def serializable_hash(adapter_options = {},
-                         options = {},
-                         adapter_instance = ActiveModel::Serializer.serialization_adapter_instance.new(self))
+   def to_json *_args
+      serializable_hash
+   end
+
+   def serializable_hash(*_args)
+      binding.pry
       {
          list: super,
          page: @options[:page] || 1,
@@ -13,3 +16,5 @@ class Tiun::PagedCollectionSerializer < ActiveModel::Serializer::CollectionSeria
       }
    end
 end
+
+ListSerializer = ::Tiun::ListSerializer

@@ -1,6 +1,8 @@
 require 'rails'
 require 'active_record'
 
+require 'tiun/model'
+
 class Tiun::Engine < ::Rails::Engine
    isolate_namespace Tiun
 

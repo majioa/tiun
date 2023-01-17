@@ -1,4 +1,4 @@
-module Tiun::CoreHelper
+module ::Tiun::CoreHelper
    include ActionView::Helpers::TagHelper
 
    def react_component name, props = {}, options = {}, &block
@@ -10,3 +10,4 @@ module Tiun::CoreHelper
    end
 end
 
+CoreHelper = ::Tiun::CoreHelper

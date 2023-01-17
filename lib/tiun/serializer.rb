@@ -1,4 +1,4 @@
-module Tiun::Serializer
+module ::Tiun::Serializer
    class UndefinedModelError < StandardError; end
 
    def self.included kls
@@ -16,7 +16,16 @@ module Tiun::Serializer
    end
 
    def serializable_hash
+      binding.pry
       {
       }
    end
+
+   def to_json *args
+      binding.pry
+      @objects.jsonize(context)
+      super
+   end
 end
+
+Serializer = ::Tiun::Serializer

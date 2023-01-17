@@ -1,5 +1,9 @@
 require 'tiun/serializer'
 
-class ::<%= serializer_name %>
-   include Tiun::Serializer
+class ::<%= object_name %>
+   include ::Tiun::Serializer
+
+   def initialize *args
+      binding.pry
+   end
 end

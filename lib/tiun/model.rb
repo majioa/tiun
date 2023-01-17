@@ -33,10 +33,27 @@ module Tiun::Model
    #     ActiveRecord::Base.tiuns # => []
    #
    def tiuns
-      self.class.instance_variable_get(:@tiuns) || [] ;end
+      self.class.instance_variable_get(:@tiuns) || []
+   end
 
-   def attribute_types
-      @_tiun_attribute_types ||= Tiun.attribute_types_for(self) || super ;end
+# {"id"=>#<ActiveModel::Type::Integer:0x00007fbd4365de18 @limit=4, @precision=nil, @range=-2147483648...2147483648, @scale=nil>,
+# "date"=>#<ActiveModel::Type::String:0x00007fbd4363bb38 @false="f", @limit=nil, @precision=nil, @scale=nil, @true="t">,
+# "language_code"=>#<ActiveModel::Type::String:0x00007fbd4363bb38 @false="f", @limit=nil, @precision=nil, @scale=nil, @true="t">,
+# "alphabeth_code"=>#<ActiveModel::Type::String:0x00007fbd4363bb38 @false="f", @limit=nil, @precision=nil, @scale=nil, @true="t">,
+# "created_at"=>#<ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Timestamp:0x00007fbd4363f0f8 @limit=nil, @precision=nil, @scale=nil>,
+# "updated_at"=>#<ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Timestamp:0x00007fbd4363f0f8 @limit=nil, @precision=nil, @scale=nil>,
+# "place_id"=>#<ActiveModel::Type::Integer:0x00007fbd4365de18 @limit=4, @precision=nil, @range=-2147483648...2147483648, @scale=nil>,
+# "author_name"=>#<ActiveModel::Type::String:0x00007fbd4363bb38 @false="f", @limit=nil, @precision=nil, @scale=nil, @true="t">,
+# "council"=>#<ActiveModel::Type::String:0x00007fbd4363bb38 @false="f", @limit=nil, @precision=nil, @scale=nil, @true="t">,
+# "licit"=>#<ActiveModel::Type::Boolean:0x00007fbd4365d3f0 @limit=nil, @precision=nil, @scale=nil>,
+# "meta"=>#<ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Jsonb:0x00007fbd4365cc70 @limit=nil, @precision=nil, @scale=nil>}
+#
+#   def attribute_types
+#      binding.pry
+      #Tiun.attribute_types_for(self).attribute_map.reduce({}) {|ats, a| ats.merge(a.name => a.type)}
+#      super
+#      @_tiun_attribute_types ||= Tiun.attribute_types_for(self) || super
+#   end
 
    protected
 
@@ -69,9 +86,10 @@ module Tiun::Model
                [name.to_sym, props]
             end
          end
-       end.compact.to_h
-    rescue ActiveRecord::ConnectionNotEstablished
-       [] end
+      end.compact.to_h
+   rescue ActiveRecord::ConnectionNotEstablished
+      []
+   end
 
    #TODO
    #defaults fields: :user
@@ -80,4 +98,4 @@ module Tiun::Model
    #  all scopes (to list),
    #  all havings - has_many/ones (to form)
    # tiunable_by :field/s - for text search by this field/s
-      end
+end

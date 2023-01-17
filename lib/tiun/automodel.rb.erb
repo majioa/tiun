@@ -1,7 +1,7 @@
 require 'tiun/model'
 
-class ::<%= model_name %> < <%= base_model %>
-   extend Tiun::Model
+class ::<%= object_name %><%= object_in ? nil : " < " + base_model.to_s %>
+   extend ::Tiun::Model
 
    tiun
 end
