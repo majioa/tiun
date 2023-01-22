@@ -1,6 +1,6 @@
 begin
    require 'pry'
-rescue NameError
+rescue NameError, LoadError
 end
 require 'erb'
 require 'action_controller'
