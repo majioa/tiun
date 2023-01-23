@@ -99,3 +99,5 @@ module Tiun::Model
    #  all havings - has_many/ones (to form)
    # tiunable_by :field/s - for text search by this field/s
 end
+
+Model = Tiun::Model

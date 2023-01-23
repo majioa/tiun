@@ -31,3 +31,5 @@ class Tiun::Engine < ::Rails::Engine
       Tiun.setup
    end
 end
+
+Engine = Tiun::Engine

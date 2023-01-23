@@ -67,3 +67,5 @@ module Tiun::Policy
       user.respond_to?(:admin?) && user.admin?
    end
 end
+
+Policy = Tiun::Policy

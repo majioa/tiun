@@ -101,3 +101,5 @@ module Tiun::Migration
       Kernel.module_eval(EMBED)
    end
 end
+
+Migration = Tiun::Migration

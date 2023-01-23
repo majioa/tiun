@@ -84,3 +84,5 @@ class Tiun::CLI
       @argv = argv&.split(/\s+/)
    end
 end
+
+Cli = Tiun::CLI

@@ -44,3 +44,5 @@ class OpenStruct
       res
    end
 end
+
+Mixins = Object

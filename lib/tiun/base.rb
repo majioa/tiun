@@ -252,3 +252,5 @@ module Tiun::Base
 #      end || raise(ActiveRecord::RecordNotFound)
 #   end
 end
+
+Base = Tiun::Base

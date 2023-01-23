@@ -29,3 +29,5 @@ module Tiun::Attributes
          end
    end
 end
+
+Attributes = Tiun::Attributes

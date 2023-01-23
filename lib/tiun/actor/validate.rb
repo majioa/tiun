@@ -5,3 +5,5 @@ module Tiun::Actor::Validate
       end
    end
 end
+
+Validate = Tiun::Actor::Validate

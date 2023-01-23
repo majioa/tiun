@@ -9,3 +9,5 @@ class Tiun::MetaController < ActionController::Base
       render json: joint.as_json
    end
 end
+
+MetaController = Tiun::MetaController
