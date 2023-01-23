@@ -23,8 +23,8 @@ class Tiun::Engine < ::Rails::Engine
 
 #  end
 
-   config.autoload_paths += %W(#{Tiun::Engine.root}/lib/)
-   config.autoload_paths += %W(#{Tiun::Engine.root}/lib/tiun/views)
+#   config.autoload_paths += %W(#{Tiun::Engine.root}/lib/tiun/autoloads)
+#   config.autoload_paths += %W(#{Tiun::Engine.root}/lib/tiun/views)
 
    config.to_prepare do
       ::ActiveRecord::Base.extend(Tiun::Model)

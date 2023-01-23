@@ -1,3 +1,4 @@
+module Routes
 Tiun::Engine.routes.draw do
 #root to: redirect('/tiun/dashboard')
 #scope module: 'tiun' do
@@ -9,4 +10,5 @@ Tiun::Engine.routes.draw do
    #Tiun.model_names.each do | model_name |
    #   resources model_name.pluralize, except: :edit
    #end
+end
 end

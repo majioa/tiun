@@ -30,3 +30,5 @@ module Tiun::Actor
       end
    end
 end
+
+Actor = Tiun::Actor
