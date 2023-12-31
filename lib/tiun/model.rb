@@ -55,6 +55,11 @@ module Tiun::Model
 #      @_tiun_attribute_types ||= Tiun.attribute_types_for(self) || super
 #   end
 
+   # Specify range to return
+   def range range
+      offset(range.begin).limit(range.end - range.begin + 1)
+   end
+
    protected
 
     # :nodoc:

@@ -50,5 +50,5 @@ Gem::Specification.new do |spec|
   # spec.add_development_dependency "active_model_serializers", "~> 0.10", ">= 0.10.6"
   spec.add_runtime_dependency "activesupport", ">= 4.1.0"
   spec.add_runtime_dependency "railties", ">= 4.1.0"
-  spec.add_runtime_dependency "jsonize", ">= 0.1.1", "~> 0.1"
+  spec.add_runtime_dependency "jsonize", "~> 0.2"
 end

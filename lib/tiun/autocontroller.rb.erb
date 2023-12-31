@@ -4,4 +4,15 @@ require 'tiun/core_helper'
 class ::<%= object_name %><%= object_in ? nil : " < " + base_controller.to_s %>
    include ::Tiun::CoreHelper
    include ::Tiun::Base
+
+   <% if action_names = action_names_for(context) %>
+      @context = (@context || {}).merge(YAML.load("<%= action_names.to_yaml.gsub('"', '\"') %>", permitted_classes: [OpenStruct, Symbol]))
+   <% end %>
+
+   <% if arg = controller_default_arg_for(context) %>
+      @default_arg ||= {}
+      <% action_names.keys.each do |x| %>
+         @default_arg['<%= x %>'] = '<%= arg %>'
+      <% end %>
+   <% end %>
 end

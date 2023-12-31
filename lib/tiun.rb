@@ -81,16 +81,28 @@ module Tiun
          config
       end
 
+      def kind_for context
+         context.methods.reduce(nil) { |k, m| k || m.kind }
+      end
+
       def model_name_for context
-         context.model ||
-            %r{(?:/(?<c>[^/]+)/:[^/]+|/(?<c>[^:/]+)).json} =~ context.path && c ||
-            context.name.split(".").first
+         if type = find_type(kind_for(context))
+            type.model || type.name
+         else
+            context.model ||
+               %r{(?:/(?<c>[^/]+)/:[^/]+|/(?<c>[^:/]+)).json} =~ context.path && c ||
+               context.name.split(".").first
+         end
       end
 
       def controller_name_for context
-         context.controller ||
-            %r{^(?:(?<c>.+)/:[^/]+|/(?<c>[^:]+)).json} =~ context.path && c ||
-            context.name.split(".").first
+         if type = find_type(kind_for(context))
+            type.controller || type.model || type.name
+         else
+            context.controller ||
+               %r{^(?:(?<c>.+)/:[^/]+|/(?<c>[^:]+)).json} =~ context.path && c ||
+               context.name.split(".").first
+         end
       end
 
       def model_title_for context
@@ -105,10 +117,16 @@ module Tiun
          name ? name.pluralize.camelize + 'Controller' : raise(InvalidControllerError)
       end
 
+      def controller_default_arg_for context
+         /:(?<arg>[^\.]+)/ =~ context.path
+
+         arg
+      end
+
       def route_title_for context
          name = controller_name_for(context)
 
-         name ? name.pluralize : raise(InvalidControllerError)
+         name ? name.pluralize.tableize : raise(InvalidControllerError)
       end
 
       def table_title_for context
@@ -131,6 +149,33 @@ module Tiun
 #         context.list_serializer || model_name_for(context).singularize.camelize + "ListSerializer"
 #      end
 #
+      # find type record in type record table for last version of
+      #
+      def find_type type_names_in
+         type_names = "#{type_names_in}".split(/\s+/)
+
+         types.reduce(nil) do |t, type|
+            type_names.include?(type.name) && (!t || !t.version || type.version && t.version < type.version) ? type : t
+         end unless type_names.blank?
+      end
+
+      # +type_attributes_for+ renders attributes array for the type name or type itself specified,
+      # if no type name has been found, it returns a blank array.
+      #
+      def type_attributes_for type_name_in
+         type = type_name_in.is_a?(OpenStruct) ? type_name_in : find_type(type_name_in)
+
+         return [] unless type
+
+         type.fields.map do |x|
+            if sub = Tiun.find_type(x.kind)
+               { x.name => type_attributes_for(sub) }
+            else
+               x.name
+            end
+         end
+      end
+
       def detect_type type_in
          type = TYPE_MAP[type_in]
          type || !type.nil? && "reference" || nil
@@ -226,7 +271,7 @@ module Tiun
                   /(?<pre>.*)<(?<key>\w+)>(?<post>.*)/ =~ context.path &&
                   "#{pre}:#{key}#{post}" || context.path
 
-               if res.select {|x| x[:uri] == path }.blank?
+               if res.select {|x| x[:uri] == path && x[:kind] == action }.blank?
                   attrs = { uri: path, path: "#{controller}##{action}", kind: method.name }
                   attrs = attrs.merge(options: {defaults: { format: format }, constraints: { format: format }}) if format
 
@@ -394,42 +439,43 @@ module Tiun
 #         end.flatten
 #      end
 #
-      def setup_classes settings
-         settings.each do | (model_name, tiun) |
-            name = -> { model_name.to_s.camelize }
-            names = -> { model_name.to_s.pluralize.camelize }
-            params = -> { tiun[:fields].map(&:first) }
-
-            controller_rb = <<-RB
-               class #{names[]}Controller < #{base_controller}
-                  include Tiun::Base
-
-                  def model
-                     ::#{name[]} ;end
-
-                  def object_serializer
-                     #{name[]}Serializer ;end
-
-                  def objects_serializer
-                     #{names[]}Serializer
-                  rescue NameError
-                     Tiun::PagedCollectionSerializer ;end
-
-                  def permitted_params
-                     params.require( '#{model_name}' ).permit( #{params[]} ) ;end;end
-            RB
-
-            policy_rb = <<-RB
-               class #{name[]}Policy
-                  include Tiun::Policy
-               end
-            RB
-
-            class_eval(controller_rb)
-            class_eval(policy_rb)
-         end
-      end
-
+#      def setup_classes settings
+#         settings.each do | (model_name, tiun) |
+#            name = -> { model_name.to_s.camelize }
+#            names = -> { model_name.to_s.pluralize.camelize }
+#            params = -> { tiun[:fields].map(&:first) }
+#
+#            binding.pry
+#            controller_rb = <<-RB
+#               class #{names[]}Controller < #{base_controller}
+#                  include Tiun::Base
+#
+#                  def model
+#                     ::#{name[]} ;end
+#
+#                  def object_serializer
+#                     #{name[]}Serializer ;end
+#
+#                  def objects_serializer
+#                     #{names[]}Serializer
+#                  rescue NameError
+#                     Tiun::PagedCollectionSerializer ;end
+#
+#                  def permitted_params
+#                     params.require( '#{model_name}' ).permit( #{params[]} ) ;end;end
+#            RB
+#
+#            policy_rb = <<-RB
+#               class #{name[]}Policy
+#                  include Tiun::Policy
+#               end
+#            RB
+#
+#            class_eval(controller_rb)
+#            class_eval(policy_rb)
+#         end
+#      end
+#
       def root
          Gem::Specification.find_by_name( "tiun" ).full_gem_path
       end
