@@ -1,0 +1,8 @@
+---
+ru:
+   tiun:
+      auth:
+         controller:
+            invalidtokenerror: "Неверный токен"
+      session:
+         updated: "Токен дейсвителен, а сессия обновлена"

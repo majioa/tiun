@@ -2,12 +2,14 @@ require 'active_support'
 
 module Tiun::Base
    class OutOfRangeError < StandardError; end
+   class InvalidParamNameError < StandardError; end
 
    extend ActiveSupport::Concern
 
    included do
-      attr_reader :objects, :object
+      include Tiun::Auth
 
+      attr_reader :object
 
       #attr_accessor :params
       #define_callbacks :subscribe
@@ -21,16 +23,18 @@ module Tiun::Base
 #         I18n.with_locale(I18n.locale.to_s, &block)
 #      include Pundit
 
-#      before_action :authenticate_user!
+      before_action :set_languages, if: ->{ respond_to?(:set_languages) }
+      before_action :authenticate_user
 #      before_action :set_tokens, only: %i(index)
 #      before_action :set_page, only: %i(index)
 #      before_action :set_locales
       before_action :new_object, only: %i(create)
       before_action :fetch_object, only: %i(show update destroy)
       before_action :fetch_objects, only: %i(index)
+      before_action :fetch_ac_objects, only: %i(ac)
       before_action :parse_range, only: %i(index ac)
       after_action :return_range, only: %i(index ac)
-#      before_action :authorize!
+      before_action :authorize!
 
       rescue_from Exception, with: :exception
       rescue_from ActionView::MissingTemplate, with: :missing_template
@@ -57,7 +61,7 @@ module Tiun::Base
       end
    end
 
-   # POST /<objects>/create.json
+   # POST /<objects>.json
    def create
       object.save!
 
@@ -93,13 +97,14 @@ module Tiun::Base
 
    # DELETE /<objects>/:id.json
    def destroy
+      answer = serialize(object)
       object.destroy
 
       respond_to do |format|
          format.html
-         format.json { render json: serialize(object) }
+         format.json { render json: answer }
          format.jsonp { head :ok }
-         format.any { render json: serialize(object), content_type: 'application/json' }
+         format.any { render json: answer, content_type: 'application/json' }
       end
    rescue Exception
      binding.pry
@@ -107,8 +112,6 @@ module Tiun::Base
 
    # GET /<objects>/ac.json
    def ac
-      @objects = apply_scopes(model)
-
       respond_to do |format|
          format.json {
             render json: {
@@ -131,16 +134,8 @@ module Tiun::Base
       total == 0 ? 204 : total > range.end + 1 ? 206 : 200
    end
 
-   def model_name
-      @_model_name ||= self.class.to_s.gsub(/.*::/, "").gsub("Controller", "").singularize
-   end
-
    def param_name
       @_param_name ||= model_name.tableize.singularize
-   end
-
-   def model
-      @_model ||= model_name.constantize
    end
 
 #   def serializer
@@ -159,10 +154,6 @@ module Tiun::Base
 #      list_serializer.new(model: model)
 #   end
 #
-   def apply_scopes model
-      model
-   end
-
 #   def policy_name
 #      @policy_name ||= Object.const_get(model.name + "Policy")
 #   rescue NameError
@@ -178,56 +169,66 @@ module Tiun::Base
    end
 
    def unprocessable_entity e
-      errors = @object && @object.errors.any? && @object.errors || e.to_s
+      errors = @object && @object.errors.any? && @object.errors.to_a || [e.to_s]
       args = params.permit(*permitted_filter).to_h
       render json: { args: args, error: errors }, status: :unprocessable_entity
    end
 
    def parameter_missing e
-      error = "[#{e.class}]> #{e.message} \n\t #{e.backtrace.join("\n\t")}"
+      errors = ["[#{e.class}]{parameter_missing}> #{e.message} \n\t #{e.backtrace.join("\n\t")}"]
       args = params.permit(*permitted_filter).to_h
-      render json: { args: args, error: error }, status: 500
+      render json: { args: args, error: errors }, status: 500
    end
 
    def missing_template e
-      error = "[#{e.class}]> #{e.message} \n\t #{e.backtrace.join("\n\t")}"
+      errors = ["[#{e.class}]{missing_template}> #{e.message} \n\t #{e.backtrace.join("\n\t")}"]
       args = params.permit(*permitted_filter).to_h
-      render json: { args: args, error: error }, status: 500
+      render json: { args: args, error: errors }, status: 500
    end
 
    def exception e
-      error = "[#{e.class}]> #{e.message} \n\t #{e.backtrace.join("\n\t")}"
+      errors = ["[#{e.class}]{exception}> #{e.message} \n\t #{e.backtrace.join("\n\t")}"]
       args = params.permit(*permitted_filter).to_h
-      render json: { args: args, error: error }, status: 500
+      render json: { args: args, error: errors }, status: 500
    end
 
    def ac_limit
       500
    end
 
-   def context
-      @_context ||= { except: supplement_names, locales: locales }
-   end
-
    def ac_context
       @_ac_context ||= { only: %i(key value) }
    end
 
-   def permitted_filter
+   def tiun_context
+      self.class.instance_variable_get(:@context) || {}
+   end
+
+   def tiun_args
+      tiun_context[action_name]&.args || []
+   end
+
+   def _permitted_filter
       @_permitted_filter ||= {}
-      @_permitted_filter[action_name] ||=
-         if c = self.class.instance_variable_get(:@context)[action_name]
-            c.args.map {|x|x.name}
+   end
+
+   def permitted_filter
+      _permitted_filter[action_name] ||=
+         if c = tiun_context[action_name]
+            (c.args || []).reject { |x| x.hidden }.map {|x| x.name }
          else
             [model.primary_key]
          end
    end
 
-   def permitted_self
+   def _permitted_self
       @_permitted_self ||= {}
-      @_permitted_self[action_name] ||=
-         if c = self.class.instance_variable_get(:@context)[action_name]
-            c.args.map {|x|x.name}
+   end
+
+   def permitted_self
+      _permitted_self[action_name] ||=
+         if c = tiun_context[action_name]
+            (c.args || []).reject { |x| x.hidden }.map {|x| x.kind == 'json' ? {x.name => {}} : x.name }
          else
             model.attribute_types.keys
          end
@@ -239,7 +240,7 @@ module Tiun::Base
             child_model = model.reflections[name.to_s].klass
             value = child_model.attribute_types.keys
             value << :_destroy if opts[:allow_destroy]
-            res[name] = value - supplement_names.map(&:to_s)
+            res["#{name}_attributes"] = value - supplement_names.map(&:to_s)
 
             res
          end
@@ -249,34 +250,28 @@ module Tiun::Base
       params.require(param_name).permit(*permitted_self, **permitted_children)
    end
 
-   def supplement_names
-      %i(created_at updated_at tsv)
-   end
-
    def total
-      %i(total_size total_count count).reduce(nil) do |count, method|
-         objects.respond_to?(method) && !count ? objects.send(method) : count
-      end
+      @total ||=
+         %i(total_size total_count count).reduce(nil) do |count, method|
+            objects.respond_to?(method) && !count ? objects.send(method) : count
+         end || raise
    end
 
    def paged_objects
       objects.range(range)
    end
 
-   def render_type type
-   end
-
    def get_properties
       @get_properties ||=
-         if k = self.class.instance_variable_get(:@context)[action_name]&.kind
-            Tiun.type_attributes_for(k)
+         if k = tiun_context[action_name]&.kind
+            Tiun.type_attributes_for(k, %i(read write))
          else
             model.attribute_types.keys
          end
    end
 
-   def serialize_collection collection
-      collection.jsonize(context.merge(only: get_properties))
+   def serialize_collection collection, context_in = {}
+      collection.jsonize(context.merge(context_in).merge(only: get_properties))
 #         format.json { render :index, json: objects, locales: locales,
 #                                      serializer: objects_serializer,
 #                                      each_serializer: serializer,
@@ -290,28 +285,23 @@ module Tiun::Base
 #         format.json { render :show, json: @object, locales: @locales,
 #                                     serializer: serializer }
    end
-   #
 
    def authorize!
-      binding.pry
-      if !policy.new(current_user, @object).send(action_name + '?')
+      pol = policy.new(current_user, @object)
+
+      if pol.respond_to?(action_name + "?") && !pol.send(action_name + "?") ||
+         pol.respond_to?(:match?) && !pol.match?(allowing_permission)
          raise Tiun::Policy::NotAuthorizedError, "not allowed to do #{action_name} this #{@object.inspect}"
       end
    end
 
    def per
       @per ||= (params[:per] ||
-         if args = self.class.instance_variable_get(:@context)[action_name]&.args
-            args.reduce(nil) { |res, x| res || x.name == "per" && x.default || nil }
-         end || 25).to_i
+         tiun_args.reduce(nil) { |res, x| res || x.name == "per" && x.default || nil } || 25).to_i
    end
 
    def page
-      @page ||= (params[:page] || 1).to_i
-   end
-
-   def locales
-      @locales ||= [I18n.locale]
+      @page ||= (params[:page] || params[:p] || 1).to_i
    end
 
    def set_tokens
@@ -326,6 +316,16 @@ module Tiun::Base
 
    def range
       @range
+   end
+
+   def allowing_permission
+      if perm = tiun_context[action_name].policy
+         [perm].flatten.map { |x| x.split(",") }.flatten
+      end
+   end
+
+   def objects
+      @objects ||= with_others(objects_scope)
    end
 
    # callbacks
@@ -344,27 +344,61 @@ module Tiun::Base
       @object = model.new(permitted_params)
    end
 
-   def fetch_objects
-      @objects = apply_scopes(model)#.page(params[:page])
+   def fetch_object
+      @object = object_scope.first || raise(ActiveRecord::RecordNotFound)
    end
 
-   def fetch_object
-      arg_name = default_arg
+   def fetch_objects
+      @objects = objects
+   end
 
-      @object ||=
-         if !arg_name
-            model.find(params[model.primary_key])
-         elsif model.respond_to?("by_#{arg_name}")
-            model.send("by_#{arg_name}", params[arg_name]).first
+   def fetch_ac_objects
+      @objects = apply_scopes(model)
+   end
+
+   def object_scope
+      apply_scope(model, [default_arg || model.primary_key])
+   end
+
+   def objects_scope
+      apply_scope(model, tiun_args.map { |a| a.name })
+   end
+
+   def apply_scope model = self.model, args = []
+      args.reduce(model) do |rel, arg|
+         next rel unless params.include?(arg)
+
+         if model.respond_to?("by_#{arg}")
+            rel.send("by_#{arg}", params[arg])
+         elsif model.respond_to?("by_#{arg.alias}")
+            rel.send("by_#{arg.alias}", params[arg])
+         elsif model.attribute_names.include?(arg.alias || arg.name)
+            rel.where({ arg => params[arg] })
          else
-            model.where({ arg_name => params[arg_name] }).first
-         end || raise(ActiveRecord::RecordNotFound)
+            raise InvalidParamNameError.new("Not valid rule to fetch object by #{arg_name} argument")
+         end
+      end
+   end
+
+   def with_others rela
+      k = tiun_context[action_name]&.kind
+
+      Tiun.sublings_for(k, :write).reduce(rela) do |r, (sub, props)|
+         if r.respond_to?("with_#{sub}")
+            r.send("with_#{sub}", context.merge(only: props))
+         else
+            #TODO raise?
+            r
+         end
+      end
    end
 
    def return_range
+      response.headers["Access-Control-Expose-Headers"] = "Content-Range"
       response.headers["Accept-Ranges"] = "records"
       response.headers["Content-Range"] = "records #{range.begin}-#{range.end}/#{total}"
-      response.headers["Content-Length"] = [range.end + 1, total].min - range.begin
+      # NOTE: HTTP isn't supported range except bytes https://stackoverflow.com/a/9480391/446267
+      # response.headers["Content-Length"] = [range.end + 1, total].min - range.begin
    end
 end
 

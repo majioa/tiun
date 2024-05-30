@@ -11,32 +11,12 @@ module Tiun::Policy
       true
    end
 
-   def all?
-      default?
-   end
-
-   def index?
-      default?
-   end
-
    def show?
       scope.where(id: record.id).exists?
    end
 
-   def create?
-      default?
-   end
-
-   def new?
-      default?
-   end
-
-   def update?
-      default?
-   end
-
-   def destroy?
-      default?
+   def match? allowing_permissions
+      (user.permissions & allowing_permissions).any?
    end
 
    def scope

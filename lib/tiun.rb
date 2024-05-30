@@ -11,6 +11,7 @@ require "tiun/version"
 require "tiun/migration"
 require "tiun/attributes"
 require "tiun/base"
+require "tiun/auth"
 require "tiun/core_helper"
 
 module Tiun
@@ -118,9 +119,7 @@ module Tiun
       end
 
       def controller_default_arg_for context
-         /:(?<arg>[^\.]+)/ =~ context.path
-
-         arg
+         context.key || /:(?<arg>[^\.]+)/.match(context.path)&.[](:arg)
       end
 
       def route_title_for context
@@ -159,21 +158,37 @@ module Tiun
          end unless type_names.blank?
       end
 
+      # generates a hash to collect all subling relation for the specificed kind type
+      #
+      def sublings_for type_name_in, kind_in = %i(read write)
+        kind = [kind_in].flatten
+
+        type_attributes_for(type_name_in, kind).reduce({}) do |res, value_in|
+           if value_in.is_a?(Hash)
+              res.merge(value_in)
+           else
+              res
+           end
+        end
+      end
+
       # +type_attributes_for+ renders attributes array for the type name or type itself specified,
       # if no type name has been found, it returns a blank array.
       #
-      def type_attributes_for type_name_in
+      def type_attributes_for type_name_in, kind = %i(read write)
          type = type_name_in.is_a?(OpenStruct) ? type_name_in : find_type(type_name_in)
 
          return [] unless type
 
          type.fields.map do |x|
+            next nil unless x.to_h.keys.select { |y| /only$/ =~ y }.reduce(kind)  { |k, prop| x[prop] ? ["#{prop}".sub("only","").to_sym] & k : k }.any?
+
             if sub = Tiun.find_type(x.kind)
-               { x.name => type_attributes_for(sub) }
+               { x.name => type_attributes_for(sub, kind) }
             else
                x.name
             end
-         end
+         end.compact
       end
 
       def detect_type type_in
@@ -194,9 +209,10 @@ module Tiun
             method_name = method.name
             rule = MAP[method_name]
 
-            action = rule.is_a?(String) && rule || rule.reduce(nil) do |a, (re, action)|
-               a || context.path =~ re && action || nil
-            end
+            action =
+               method.action || (rule.is_a?(String) && rule || rule.reduce(nil) do |a, (re, action)|
+                  a || context.path =~ re && action || nil
+               end)
 
             # TODO validated types
             if ! action
@@ -235,7 +251,7 @@ module Tiun
       rescue NoMethodError
          error :no_resources_section_defined_in_config, {config: config, default: default}
 
-         []
+         default
       end
 
       def load_defaults_from config
@@ -378,12 +394,24 @@ module Tiun
       rescue NameError
       end
 
-      def base_model
-         @base_model ||= ActiveRecord::Base
+      def table_exist? name
+         ActiveRecord::Base.connection.data_source_exists?(name.to_s.tableize)
+      end
+
+      def base_model name = nil
+         @base_model ||= table_exist?(name) ? ActiveRecord::Base : ActiveModel::Model
       end
 
       def base_controller
-         @base_controller ||= ActionController::Base
+         @base_controller ||= defined?(ApplicationController) ? ApplicationController : ActionController::Base
+      end
+
+      def template_controller_for context
+         t = context.template&.camelize
+
+         self.const_get(t).const_get(:Controller)
+      rescue NameError, TypeError
+         ::Tiun::Base
       end
 
       def error code, options
@@ -486,6 +514,5 @@ module Tiun
 #   end
 end
 
-require "tiun/base"
 require "tiun/policy"
 require "tiun/engine"

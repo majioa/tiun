@@ -1,6 +1,9 @@
 require 'tiun/model'
 
-class ::<%= object_name %><%= object_in ? nil : " < " + base_model.to_s %>
+class ::<%= object_name %><%= object_in || !table_exist?(object_name) ? nil : " < " + base_model(object_name).to_s %>
+   <% unless table_exist?(object_name) %>
+      include <%= base_model(object_name).to_s %>
+   <% end %>
    extend ::Tiun::Model
 
    tiun

@@ -8,6 +8,14 @@ module ::Tiun::CoreHelper
       })
       content_tag(:div, '', html_options, &block)
    end
+
+   def current_user_data
+      @current_user&.jsonize(only:
+         ["id", "last_login_at", "last_active_at", "default_name", "refresh_token", "session_token",
+         "accounts" => %w(id no type),
+         "user_names" => %w(id kind way usage source main nomen_id name),
+         "descriptions" => %w(id language_code alphabeth_code type text)])
+   end
 end
 
 CoreHelper = ::Tiun::CoreHelper

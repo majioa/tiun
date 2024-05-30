@@ -1,9 +1,11 @@
 require 'tiun/base'
 require 'tiun/core_helper'
 
-class ::<%= object_name %><%= object_in ? nil : " < " + base_controller.to_s %>
+<% base = object_in ? nil : " < #{base_controller}" %>
+
+class ::<%= object_name %><%= base %>
    include ::Tiun::CoreHelper
-   include ::Tiun::Base
+   include ::<%= template_controller_for(context) %>
 
    <% if action_names = action_names_for(context) %>
       @context = (@context || {}).merge(YAML.load("<%= action_names.to_yaml.gsub('"', '\"') %>", permitted_classes: [OpenStruct, Symbol]))

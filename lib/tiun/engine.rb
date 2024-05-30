@@ -25,6 +25,7 @@ class Tiun::Engine < ::Rails::Engine
 
 #   config.autoload_paths += %W(#{Tiun::Engine.root}/lib/tiun/autoloads)
 #   config.autoload_paths += %W(#{Tiun::Engine.root}/lib/tiun/views)
+   config.i18n.load_path += Dir[Tiun::Engine.root.join('lib', 'config', 'locale', '**', '*.{yaml,yml}')]
 
    config.to_prepare do
       ::ActiveRecord::Base.extend(Tiun::Model)
